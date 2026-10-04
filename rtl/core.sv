@@ -12,10 +12,10 @@
      
      // hazard nets
      wire [4:0] Rd_ex, Rd_mem, Rn_id,Rm_id;
-     wire Memread_ex, Regwrite_ex, MemtoReg_mem, Branch_id, muxc, idhold, pchold;
+     wire Memread_ex, Regwrite_ex, MemtoReg_mem, Branch_id, hazardmux_id, idhold, pchold;
      
      // fwd nets
-     wire [1:0] muxa, muxb;
+     wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
      wire [4:0] Rm_ex, Rn_ex, Rd_mem, Rd_wb;
      wire Regwrite_mem, Regwrite_wb;
 
@@ -30,11 +30,11 @@
                     .ALUSrc_id(ALUSrc_id),
                     .Regwrite_id(Regwrite_id),
                     .ALUop_id(ALUop_id),
-                    .mucx(muxc),
+                    .hazardmux_id(hazardmux_id),
                     .idhold(idhold),
                     .pchold(pchold),
-                    .muxa(muxa),
-                    .muxb(muxb),
+                    .muxa(fwdmuxa_ex),
+                    .muxb(fwdmuxb_ex),
                     .instruction_id(instruction_id),
                     .Rd_ex(Rd_ex),
                     .Rd_mem(Rd_mem),
@@ -73,7 +73,7 @@
                                 .Rn_id(Rn_id),
                                 .Rm_id(Rm_id),
                                 .Branch_id(Branch_id),
-                                .muxc(hazardmux_id),
+                                .hazardmux_id(hazardmux_id),
                                 .idhold(idhold_id),
                                 .pchold(pchold_id));
 

@@ -7,7 +7,7 @@ module hazarddetectionunit (
     input  wire [4:0] Rn_id,
     input  wire [4:0] Rm_id,
     input  wire Branch_id,
-    output logic muxc,
+    output logic hazardmux_id,
     output logic idhold,
     output logic pchold
 );
@@ -42,7 +42,7 @@ module hazarddetectionunit (
 
         stall_req = load_use_hazard | branch_dep_ex | branch_dep_mem_load;
 
-        muxc   = stall_req;
+        hazardmux_id   = stall_req;
         idhold = stall_req;
         pchold = stall_req;
     end

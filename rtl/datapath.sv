@@ -5,12 +5,13 @@
      input wire rst,
      input wire Reg2Loc_id, Unconditionbranch_id, Branch_id, Memread_id, MemtoReg_id, Memwrite_id, ALUSrc_id, Regwrite_id, 
      input wire [3:0] ALUop_id,
-     input logic muxc, idhold, pchold,
+     input logic hazardmux_id, idhold, pchold,
      input logic [1:0] muxa, muxb,
      output logic [31:0] instruction_id,
-     output logic [4:0] Rd_ex, Rd_mem, Rn_id, Rm_id,
-     output logic Memread_ex, Regwrite_ex, MemtoReg_mem, Branch_id
-     output logic [4:0] Rm_ex, Rn_ex, Rd_mem, Rd_wb;
+     output logic [4:0] Rd_ex, Rd_mem, 
+     input wire[3:0] Rn_id, Rm_id,
+     output logic Memread_ex, Regwrite_ex, MemtoReg_mem,
+     output logic [4:0] Rm_ex, Rn_ex, Rd_wb;
      output logic Regwrite_mem, Regwrite_wb;
      );
      
@@ -204,13 +205,9 @@
           ==============*/
 
      logic [63:0] pc_id, SE_Dtaddr_id;
-     logic [31:0] instruction_id;
      wire [63:0] Readdata1_id, Readdata2_id;
-     wire Reg2Loc_id, Unconditionbranch_id, Branch_id, Memread_id, MemtoReg_id, Memwrite_id, ALUSrc_id, Regwrite_id;
-     wire [3:0] ALUop_id;
      wire [5:0] shamt_id;
-     wire [4:0] Rm_id, Rn_id, Rd_id;
-     wire idhold_id, pchold_id, hazardmux_id;
+     wire hazardmux_id;
 
 
      assign shamt_id = instruction_id [15:10];
@@ -283,10 +280,9 @@
           EX stage
           ==============*/
      reg [63:0] Readdata1_ex, Readdata2_ex, SE_Dtaddr_ex;
-     reg Memread_ex, MemtoReg_ex, Memwrite_ex, ALUSrc_ex, Regwrite_ex;
+     reg MemtoReg_ex, Memwrite_ex, ALUSrc_ex, ;
      reg [3:0] ALUop_ex;
      reg [5:0] shamt_ex;
-     reg [4:0] Rm_ex, Rn_ex, Rd_ex;
      wire [63:0] result_ex,Readdata2_ex_Src;
      wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
      wire [63:0] Readdata1_ex_mux, Readdata2_ex_mux;
@@ -315,8 +311,7 @@
      /*==============
           MEM stage
           ==============*/
-     reg Memread_mem, MemtoReg_mem, Memwrite_mem, Regwrite_mem;
-     reg [4:0] Rd_mem;
+     reg Memread_mem, MemtoReg_mem, Memwrite_mem;
      reg [63:0] result_mem;
      reg [63:0] Readdata2_mem_mux;
      wire [63:0] Readmemdata_mem;
@@ -333,8 +328,7 @@
      /*==============
           WB stage
           ==============*/
-     reg MemtoReg_wb, Regwrite_wb;
-     reg [4:0] Rd_wb;
+     reg MemtoReg_wb;
      reg [63:0] result_wb;
      reg [63:0] Readmemdata_wb;
      logic [63:0] Regwritedata_wb;
