@@ -2,7 +2,7 @@
 
      module core(
      input wire clk,
-     input wire rst,
+     input wire rst
      );
      
      // ctrl nets
@@ -11,12 +11,12 @@
      wire [3:0] ALUop_id;
      
      // hazard nets
-     wire [4:0] Rd_ex, Rd_mem, Rn_id,Rm_id;
-     wire Memread_ex, Regwrite_ex, MemtoReg_mem, Branch_id, hazardmux_id, idhold, pchold;
+     wire [4:0] Rd_ex, Rd_mem,Rn_id,Rm_id;
+     wire Memread_ex, Regwrite_ex, MemtoReg_mem, hazardmux_id, idhold, pchold;
      
      // fwd nets
      wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
-     wire [4:0] Rm_ex, Rn_ex, Rd_mem, Rd_wb;
+     wire [4:0] Rm_ex, Rn_ex, Rd_wb;
      wire Regwrite_mem, Regwrite_wb;
 
      datapath datapath (.clk(clk),
@@ -31,15 +31,13 @@
                     .Regwrite_id(Regwrite_id),
                     .ALUop_id(ALUop_id),
                     .hazardmux_id(hazardmux_id),
-                    .idhold(idhold),
-                    .pchold(pchold),
+                    .idhold_id(idhold),
+                    .pchold_id(pchold),
                     .muxa(fwdmuxa_ex),
                     .muxb(fwdmuxb_ex),
                     .instruction_id(instruction_id),
                     .Rd_ex(Rd_ex),
                     .Rd_mem(Rd_mem),
-                    .Rn_id(Rn_id),
-                    .Rm_id(Rm_id),
                     .Memread_ex(Memread_ex),
                     .Regwrite_ex(Regwrite_ex),
                     .MemtoReg_mem(MemtoReg_mem),
