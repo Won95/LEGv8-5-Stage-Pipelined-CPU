@@ -12,12 +12,13 @@
      
      // hazard nets
      wire [4:0] Rd_ex, Rd_mem,Rn_id,Rm_id;
-     wire Memread_ex, Regwrite_ex, MemtoReg_mem, hazardmux_id, idhold, pchold;
+     wire Memread_ex, Regwrite_ex, MemtoReg_mem, hazardmux_id, idhold_id, pchold_id;
      
      // fwd nets
      wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
-     wire [4:0] Rm_ex, Rn_ex, Rd_wb;
+     wire [4:0] Rm_ex, Rn_ex, Rd_wb, Rn_id, Rm_id;
      wire Regwrite_mem, Regwrite_wb;
+
 
      datapath datapath (.clk(clk),
                     .rst(rst),
@@ -35,6 +36,8 @@
                     .pchold_id(pchold),
                     .muxa(fwdmuxa_ex),
                     .muxb(fwdmuxb_ex),
+                    .Rn_id(Rn_id),
+                    .Rm_id(Rm_id),
                     .instruction_id(instruction_id),
                     .Rd_ex(Rd_ex),
                     .Rd_mem(Rd_mem),
@@ -48,7 +51,7 @@
                     .Rd_wb(Rd_wb),
                     .Regwrite_mem(Regwrite_mem),
                     .Regwrite_wb(Regwrite_wb)
-                    .);
+                    );
      
      (* KEEP_HIERARCHY="yes" *)                  
      Control ctrl(.instruction(instruction_id),

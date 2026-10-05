@@ -7,14 +7,14 @@
      input wire [3:0] ALUop_id,
      input logic hazardmux_id, idhold_id, pchold_id,
      input logic [1:0] muxa, muxb,
+     output wire [4:0] Rn_id, Rm_id,
      output logic [31:0] instruction_id,
      output logic [4:0] Rd_ex, Rd_mem, 
      output logic Memread_ex, Regwrite_ex, MemtoReg_mem,
-     output logic [4:0] Rm_ex, Rn_ex, Rd_wb;
-     output logic Regwrite_mem, Regwrite_wb;
+     output logic [4:0] Rm_ex, Rn_ex, Rd_wb,
+     output logic Regwrite_mem, Regwrite_wb
      );
-     
-     wire[4:0] Rn_id, Rm_id;
+
      always @(posedge clk) begin
           if (rst) begin
                // IF/ID
@@ -210,7 +210,7 @@
      assign shamt_id = instruction_id [15:10];
      assign Rm_id = Reg2Loc_id ? instruction_id[4:0] : instruction_id[20:16];
      assign Rn_id = instruction_id[9:5];
-     assign Rd_id = instruction_id[4:0];
+     assign [4:0] Rd_id = instruction_id[4:0];
 
      //pc
      wire [63:0] pc_s2_id;
@@ -281,21 +281,20 @@
      reg [3:0] ALUop_ex;
      reg [5:0] shamt_ex;
      wire [63:0] result_ex,Readdata2_ex_Src;
-     wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
      wire [63:0] Readdata1_ex_mux, Readdata2_ex_mux;
 
      assign Readdata1_ex_mux =
-     (fwdmuxa_ex == 2'b00) ? Readdata1_ex :
-     (fwdmuxa_ex == 2'b01) ? Regwritedata_wb :
-     (fwdmuxa_ex == 2'b10) ? result_mem :
+     (muxa == 2'b00) ? Readdata1_ex :
+     (muxa == 2'b01) ? Regwritedata_wb :
+     (muxa == 2'b10) ? result_mem :
                     Readdata1_ex;
      
      assign Readdata2_ex_Src = ALUSrc_ex ? SE_Dtaddr_ex : Readdata2_ex_mux; 
      
      assign Readdata2_ex_mux =
-     (fwdmuxb_ex == 2'b00) ? Readdata2_ex :
-     (fwdmuxb_ex == 2'b01) ? Regwritedata_wb :                                                                                                                                           
-     (fwdmuxb_ex == 2'b10) ? result_mem :
+     (muxb == 2'b00) ? Readdata2_ex :
+     (muxb == 2'b01) ? Regwritedata_wb :                                                                                                                                           
+     (muxb == 2'b10) ? result_mem :
                     Readdata2_ex;
      
      (* KEEP_HIERARCHY="yes" *)
