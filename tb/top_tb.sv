@@ -18,6 +18,24 @@ module top_tb;
     reg saw_cbz_not_taken;
     reg saw_uncond_branch;
 
+    // Exact event counters for the current directed program
+    integer stall_count;
+    integer fwd_a_mem_count;
+    integer fwd_a_wb_count;
+    integer fwd_b_mem_count;
+    integer fwd_b_wb_count;
+
+    // PC-specific microarchitecture checks
+    reg saw_stall_pc20;
+    reg saw_stall_pc32;
+    reg saw_stall_pc48;
+    reg saw_stall_pc60;
+
+    reg saw_cbz_pc32_taken;
+    reg saw_cbz_pc48_not_taken;
+    reg saw_cbz_pc60_taken;
+    reg saw_b_pc72_taken;
+
     core dut(
         .clk(clk),
         .rst(rst)
@@ -43,7 +61,7 @@ module top_tb;
     endtask
 
     task check_event;
-        input [8*32-1:0] event_name;
+        input [8*40-1:0] event_name;
         input observed;
         begin
             if (observed === 1'b1) begin
@@ -52,6 +70,23 @@ module top_tb;
             end
             else begin
                 $display("[FAIL] %0s was not observed", event_name);
+                fail_count = fail_count + 1;
+            end
+        end
+    endtask
+
+    task check_count;
+        input [8*40-1:0] event_name;
+        input integer actual;
+        input integer expected;
+        begin
+            if (actual == expected) begin
+                $display("[PASS] %0s count = %0d", event_name, actual);
+                pass_count = pass_count + 1;
+            end
+            else begin
+                $display("[FAIL] %0s count expected=%0d actual=%0d",
+                         event_name, expected, actual);
                 fail_count = fail_count + 1;
             end
         end
@@ -73,11 +108,27 @@ module top_tb;
         saw_cbz_not_taken = 1'b0;
         saw_uncond_branch = 1'b0;
 
+        stall_count = 0;
+        fwd_a_mem_count = 0;
+        fwd_a_wb_count = 0;
+        fwd_b_mem_count = 0;
+        fwd_b_wb_count = 0;
+
+        saw_stall_pc20 = 1'b0;
+        saw_stall_pc32 = 1'b0;
+        saw_stall_pc48 = 1'b0;
+        saw_stall_pc60 = 1'b0;
+
+        saw_cbz_pc32_taken = 1'b0;
+        saw_cbz_pc48_not_taken = 1'b0;
+        saw_cbz_pc60_taken = 1'b0;
+        saw_b_pc72_taken = 1'b0;
+
         rst = 1'b1;
         #12;
         rst = 1'b0;
 
-        // 충분히 길게 돌려야 instructionmemory[18]의 B #0 까지 감
+        // Run long enough to reach instructionmemory[18] and observe B #0.
         #500;
 
         $display("========== FINAL PIPELINE STATE ==========");
@@ -118,14 +169,31 @@ module top_tb;
         check_reg(24, 64'd26);
 
         $display("=========== PIPELINE EVENT CHECK ========");
-        check_event("stall",               saw_stall);
-        check_event("forward A from MEM",  saw_fwd_a_mem);
-        check_event("forward A from WB",   saw_fwd_a_wb);
-        check_event("forward B from MEM",  saw_fwd_b_mem);
-        check_event("forward B from WB",   saw_fwd_b_wb);
-        check_event("CBZ taken",           saw_cbz_taken);
-        check_event("CBZ not taken",       saw_cbz_not_taken);
+        check_event("stall",                saw_stall);
+        check_event("forward A from MEM",   saw_fwd_a_mem);
+        check_event("forward A from WB",    saw_fwd_a_wb);
+        check_event("forward B from MEM",   saw_fwd_b_mem);
+        check_event("forward B from WB",    saw_fwd_b_wb);
+        check_event("CBZ taken",            saw_cbz_taken);
+        check_event("CBZ not taken",        saw_cbz_not_taken);
         check_event("unconditional branch", saw_uncond_branch);
+
+        $display("=========== STRICT EVENT CHECK ========== ");
+        check_count("stall",              stall_count,     4);
+        check_count("forward A from MEM", fwd_a_mem_count, 5);
+        check_count("forward A from WB",  fwd_a_wb_count,  1);
+        check_count("forward B from MEM", fwd_b_mem_count, 3);
+        check_count("forward B from WB",  fwd_b_wb_count,  5);
+
+        check_event("stall at ID PC=20",   saw_stall_pc20);
+        check_event("stall at ID PC=32",   saw_stall_pc32);
+        check_event("stall at ID PC=48",   saw_stall_pc48);
+        check_event("stall at ID PC=60",   saw_stall_pc60);
+
+        check_event("CBZ taken at PC=32",      saw_cbz_pc32_taken);
+        check_event("CBZ not taken at PC=48",  saw_cbz_pc48_not_taken);
+        check_event("CBZ taken at PC=60",      saw_cbz_pc60_taken);
+        check_event("B taken at PC=72",        saw_b_pc72_taken);
 
         $display("=======================================");
 
@@ -144,34 +212,66 @@ module top_tb;
     // Observe pipeline events during execution.
     always @(posedge clk) begin
         if (!rst) begin
-            // Stall must freeze PC/ID and inject a bubble through the control mux.
-            if (dut.pchold_id && dut.idhold_id && dut.hazardmux_id)
+            // Stall: freeze PC/ID and inject a bubble through the control mux.
+            if (dut.pchold_id && dut.idhold_id && dut.hazardmux_id) begin
                 saw_stall <= 1'b1;
+                stall_count <= stall_count + 1;
+
+                case (dut.datapath.pc_id)
+                    64'd20: saw_stall_pc20 <= 1'b1;
+                    64'd32: saw_stall_pc32 <= 1'b1;
+                    64'd48: saw_stall_pc48 <= 1'b1;
+                    64'd60: saw_stall_pc60 <= 1'b1;
+                    default: ;
+                endcase
+            end
 
             // Forwarding mux encoding: 01 = WB, 10 = MEM.
-            if (dut.fwdmuxa_ex == 2'b10)
+            if (dut.fwdmuxa_ex == 2'b10) begin
                 saw_fwd_a_mem <= 1'b1;
-            if (dut.fwdmuxa_ex == 2'b01)
+                fwd_a_mem_count <= fwd_a_mem_count + 1;
+            end
+            if (dut.fwdmuxa_ex == 2'b01) begin
                 saw_fwd_a_wb <= 1'b1;
-            if (dut.fwdmuxb_ex == 2'b10)
+                fwd_a_wb_count <= fwd_a_wb_count + 1;
+            end
+            if (dut.fwdmuxb_ex == 2'b10) begin
                 saw_fwd_b_mem <= 1'b1;
-            if (dut.fwdmuxb_ex == 2'b01)
+                fwd_b_mem_count <= fwd_b_mem_count + 1;
+            end
+            if (dut.fwdmuxb_ex == 2'b01) begin
                 saw_fwd_b_wb <= 1'b1;
+                fwd_b_wb_count <= fwd_b_wb_count + 1;
+            end
 
-            // Only count a CBZ decision after any dependency stall is released.
-            if (dut.Branch_id && !dut.idhold_id && dut.datapath.PCSrc_id)
-                saw_cbz_taken <= 1'b1;
-            if (dut.Branch_id && !dut.idhold_id && !dut.datapath.PCSrc_id)
-                saw_cbz_not_taken <= 1'b1;
+            // Branch checks at the exact ID-stage PC of the directed program.
+            if (dut.Branch_id && !dut.idhold_id) begin
+                if (dut.datapath.PCSrc_id) begin
+                    saw_cbz_taken <= 1'b1;
+                    if (dut.datapath.pc_id == 64'd32)
+                        saw_cbz_pc32_taken <= 1'b1;
+                    if (dut.datapath.pc_id == 64'd60)
+                        saw_cbz_pc60_taken <= 1'b1;
+                end
+                else begin
+                    saw_cbz_not_taken <= 1'b1;
+                    if (dut.datapath.pc_id == 64'd48)
+                        saw_cbz_pc48_not_taken <= 1'b1;
+                end
+            end
 
-            if (dut.Unconditionbranch_id && dut.datapath.PCSrc_id)
+            if (dut.Unconditionbranch_id && dut.datapath.PCSrc_id) begin
                 saw_uncond_branch <= 1'b1;
+                if (dut.datapath.pc_id == 64'd72)
+                    saw_b_pc72_taken <= 1'b1;
+            end
         end
 
         $display(
-            "t=%0t | pc_if=%0d | if=%h | id=%h | hold(pcid/hz)=%b%b%b | PCSrc=%b | fwdA=%b fwdB=%b | Rm_id=%0d Rn_id=%0d Rd_id=%0d | Rd_ex=%0d Rd_mem=%0d Rd_wb=%0d | MemR_ex=%b Mem2R_mem=%b RegW(mem/wb)=%b%b | result_ex=%0d result_mem=%0d wbdata=%0d",
+            "t=%0t | pc_if=%0d | pc_id=%0d | if=%h | id=%h | hold(pcid/hz)=%b%b%b | PCSrc=%b | fwdA=%b fwdB=%b | Rm_id=%0d Rn_id=%0d Rd_id=%0d | Rd_ex=%0d Rd_mem=%0d Rd_wb=%0d | MemR_ex=%b Mem2R_mem=%b RegW(mem/wb)=%b%b | result_ex=%0d result_mem=%0d wbdata=%0d",
             $time,
             dut.datapath.pc_if,
+            dut.datapath.pc_id,
             dut.datapath.instruction_if,
             dut.instruction_id,
             dut.pchold_id,
