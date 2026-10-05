@@ -16,7 +16,7 @@
      
      // fwd nets
      wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
-     wire [4:0] Rm_ex, Rn_ex, Rd_wb, Rn_id, Rm_id;
+     wire [4:0] Rm_ex, Rn_ex, Rd_wb;
      wire Regwrite_mem, Regwrite_wb;
 
 
@@ -32,8 +32,8 @@
                     .Regwrite_id(Regwrite_id),
                     .ALUop_id(ALUop_id),
                     .hazardmux_id(hazardmux_id),
-                    .idhold_id(idhold),
-                    .pchold_id(pchold),
+                    .idhold_id(idhold_id),
+                    .pchold_id(pchold_id),
                     .muxa(fwdmuxa_ex),
                     .muxb(fwdmuxb_ex),
                     .Rn_id(Rn_id),
@@ -44,10 +44,8 @@
                     .Memread_ex(Memread_ex),
                     .Regwrite_ex(Regwrite_ex),
                     .MemtoReg_mem(MemtoReg_mem),
-                    .Branch_id(Branch_id),
                     .Rm_ex(Rm_ex),
                     .Rn_ex(Rn_ex),
-                    .Rd_mem(Rd_mem),
                     .Rd_wb(Rd_wb),
                     .Regwrite_mem(Regwrite_mem),
                     .Regwrite_wb(Regwrite_wb)

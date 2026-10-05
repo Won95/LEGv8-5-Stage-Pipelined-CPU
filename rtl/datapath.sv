@@ -206,11 +206,12 @@
      logic [63:0] pc_id, SE_Dtaddr_id;
      wire [63:0] Readdata1_id, Readdata2_id;
      wire [5:0] shamt_id;
+     wire [4:0] Rd_id;
 
      assign shamt_id = instruction_id [15:10];
      assign Rm_id = Reg2Loc_id ? instruction_id[4:0] : instruction_id[20:16];
      assign Rn_id = instruction_id[9:5];
-     assign [4:0] Rd_id = instruction_id[4:0];
+     assign Rd_id = instruction_id[4:0];
 
      //pc
      wire [63:0] pc_s2_id;
