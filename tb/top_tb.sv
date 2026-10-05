@@ -5,15 +5,40 @@ module top_tb;
     reg clk;
     reg rst;
 
+    integer pass_count;
+    integer fail_count;
+
     core dut(
         .clk(clk),
         .rst(rst)
     );
 
+    task check_reg;
+        input integer reg_num;
+        input [63:0] expected;
+        begin
+            if (dut.datapath.REG.registers[reg_num] === expected) begin
+                $display("[PASS] x%0d = %0d", reg_num,
+                         dut.datapath.REG.registers[reg_num]);
+                pass_count = pass_count + 1;
+            end
+            else begin
+                $display("[FAIL] x%0d expected=%0d actual=%0d",
+                         reg_num,
+                         expected,
+                         dut.datapath.REG.registers[reg_num]);
+                fail_count = fail_count + 1;
+            end
+        end
+    endtask
+
     initial clk = 1'b0;
     always #5 clk = ~clk;   // 10ns period
 
     initial begin
+        pass_count = 0;
+        fail_count = 0;
+
         rst = 1'b1;
         #12;
         rst = 1'b0;
@@ -38,34 +63,42 @@ module top_tb;
         $display("result_mem       = %0d", dut.datapath.result_mem);
         $display("Regwritedata_wb  = %0d", dut.datapath.Regwritedata_wb);
 
-        $display("=========== REGISTER RESULT ===========");
-        $display("x1  = %0d  (expected: 2)",   dut.datapath.REG.registers[1]);
-        $display("x2  = %0d  (expected: 3)",   dut.datapath.REG.registers[2]);
+        $display("=========== REGISTER CHECK =============");
+        check_reg(1,  64'd2);
+        check_reg(2,  64'd3);
 
-        $display("x3  = %0d  (expected: 5)",   dut.datapath.REG.registers[3]);
-        $display("x4  = %0d  (expected: 3)",   dut.datapath.REG.registers[4]);
-        $display("x5  = %0d  (expected: 1)",   dut.datapath.REG.registers[5]);
-        $display("x6  = %0d  (expected: 3)",   dut.datapath.REG.registers[6]);
+        check_reg(3,  64'd5);
+        check_reg(4,  64'd3);
+        check_reg(5,  64'd1);
+        check_reg(6,  64'd3);
 
-        $display("x9  = %0d  (expected: 99)",  dut.datapath.REG.registers[9]);
-        $display("x10 = %0d  (expected: 11)",  dut.datapath.REG.registers[10]);
+        check_reg(9,  64'd99);
+        check_reg(10, 64'd11);
 
-        $display("x12 = %0d  (expected: 101)", dut.datapath.REG.registers[12]);
-        $display("x13 = %0d  (expected: 98)",  dut.datapath.REG.registers[13]);
+        check_reg(12, 64'd101);
+        check_reg(13, 64'd98);
 
-        $display("x14 = %0d  (expected: 0)",   dut.datapath.REG.registers[14]);
-        $display("x15 = %0d  (expected: 17)",  dut.datapath.REG.registers[15]);
-        $display("x16 = %0d  (expected: 0)",   dut.datapath.REG.registers[16]);
+        check_reg(14, 64'd0);
+        check_reg(15, 64'd17);
+        check_reg(16, 64'd0);
 
-        $display("x20 = %0d  (expected: 21)",  dut.datapath.REG.registers[20]);
-        $display("x21 = %0d  (expected: 23)",  dut.datapath.REG.registers[21]);
-        $display("x22 = %0d  (expected: 24)",  dut.datapath.REG.registers[22]);
-        $display("x23 = %0d  (expected: 24)",  dut.datapath.REG.registers[23]);
-        $display("x24 = %0d  (expected: 26)",  dut.datapath.REG.registers[24]);
+        check_reg(20, 64'd21);
+        check_reg(21, 64'd23);
+        check_reg(22, 64'd24);
+        check_reg(23, 64'd24);
+        check_reg(24, 64'd26);
 
         $display("=======================================");
 
-        $finish;
+        if (fail_count == 0) begin
+            $display("ALL TESTS PASSED (%0d/%0d)", pass_count, pass_count);
+            $finish;
+        end
+        else begin
+            $display("TEST FAILED: %0d passed, %0d failed",
+                     pass_count, fail_count);
+            $fatal(1, "Register regression failed");
+        end
     end
 
     // clk 상승엣지 기준으로 한 줄씩 출력
