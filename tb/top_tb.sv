@@ -4,16 +4,17 @@ module top_tb;
 
     reg clk;
     reg rst;
-
+    
+    // p/f counting integer
     integer pass_count;
     integer fail_count;
     integer assertion_fail_count;
 
-    // State remembered for temporal-style checks.
+    // 현재 cycle과 다음 cycel에서 pc가 그대로인지 체크하기위한 reg
     reg prev_stall;
     reg [63:0] prev_pc_if;
 
-    // Pipeline event coverage flags
+    // event flag용
     reg saw_stall;
     reg saw_fwd_a_mem;
     reg saw_fwd_a_wb;
@@ -23,14 +24,14 @@ module top_tb;
     reg saw_cbz_not_taken;
     reg saw_uncond_branch;
 
-    // Exact event counters for the current directed program
+    // event counting integer
     integer stall_count;
     integer fwd_a_mem_count;
     integer fwd_a_wb_count;
     integer fwd_b_mem_count;
     integer fwd_b_wb_count;
 
-    // PC-specific microarchitecture checks
+    // pc별 flag 발생여부 reg
     reg saw_stall_pc20;
     reg saw_stall_pc32;
     reg saw_stall_pc48;
@@ -46,11 +47,11 @@ module top_tb;
         .rst(rst)
     );
 
-    task check_reg;
+    task check_reg; //reg[i]==expection 검사용 함수
         input integer reg_num;
         input [63:0] expected;
         begin
-            if (dut.datapath.REG.registers[reg_num] === expected) begin
+            if (dut.datapath.REG.registers[reg_num] === expected) begin // (===로 dont care값 제외하고 정확히 보기)
                 $display("[PASS] x%0d = %0d", reg_num,
                          dut.datapath.REG.registers[reg_num]);
                 pass_count = pass_count + 1;
@@ -65,7 +66,7 @@ module top_tb;
         end
     endtask
 
-    task check_event;
+    task check_event; //위에 설정한 flag 검사용 함수
         input [8*40-1:0] event_name;
         input observed;
         begin
@@ -80,7 +81,7 @@ module top_tb;
         end
     endtask
 
-    task check_count;
+    task check_count; //event counting용 함수
         input [8*40-1:0] event_name;
         input integer actual;
         input integer expected;
@@ -98,7 +99,7 @@ module top_tb;
     endtask
 
     initial clk = 1'b0;
-    always #5 clk = ~clk;   // 10ns period
+    always #5 clk = ~clk;   // 10ns period (100Mhz)
 
     initial begin
         pass_count = 0;
