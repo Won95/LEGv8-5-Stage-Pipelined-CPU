@@ -308,7 +308,7 @@
      /*==============
           MEM stage
           ==============*/
-     reg Memread_mem, MemtoReg_mem, Memwrite_mem;
+     reg Memread_mem, Memwrite_mem;
      reg [63:0] result_mem;
      reg [63:0] Readdata2_mem_mux;
      wire [63:0] Readmemdata_mem;
