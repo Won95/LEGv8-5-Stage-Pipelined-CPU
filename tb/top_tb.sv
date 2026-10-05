@@ -7,6 +7,11 @@ module top_tb;
 
     integer pass_count;
     integer fail_count;
+    integer assertion_fail_count;
+
+    // State remembered for temporal-style checks.
+    reg prev_stall;
+    reg [63:0] prev_pc_if;
 
     // Pipeline event coverage flags
     reg saw_stall;
@@ -98,6 +103,10 @@ module top_tb;
     initial begin
         pass_count = 0;
         fail_count = 0;
+        assertion_fail_count = 0;
+
+        prev_stall = 1'b0;
+        prev_pc_if = 64'd0;
 
         saw_stall = 1'b0;
         saw_fwd_a_mem = 1'b0;
@@ -195,6 +204,17 @@ module top_tb;
         check_event("CBZ taken at PC=60",      saw_cbz_pc60_taken);
         check_event("B taken at PC=72",        saw_b_pc72_taken);
 
+        $display("=========== ASSERTION SUMMARY ===========");
+        if (assertion_fail_count == 0) begin
+            $display("[PASS] runtime assertions: no failures");
+            pass_count = pass_count + 1;
+        end
+        else begin
+            $display("[FAIL] runtime assertions: %0d failure(s)",
+                     assertion_fail_count);
+            fail_count = fail_count + 1;
+        end
+
         $display("=======================================");
 
         if (fail_count == 0) begin
@@ -209,9 +229,44 @@ module top_tb;
         end
     end
 
-    // Observe pipeline events during execution.
+    // Observe pipeline events and check runtime invariants.
     always @(posedge clk) begin
         if (!rst) begin
+            // ASSERTION 1:
+            // Stall control signals must be consistent: either 000 or 111.
+            assert (({dut.pchold_id, dut.idhold_id, dut.hazardmux_id} == 3'b000) ||
+                    ({dut.pchold_id, dut.idhold_id, dut.hazardmux_id} == 3'b111))
+            else begin
+                $error("ASSERT: inconsistent stall controls at t=%0t: pchold=%b idhold=%b hazardmux=%b",
+                       $time, dut.pchold_id, dut.idhold_id, dut.hazardmux_id);
+                assertion_fail_count = assertion_fail_count + 1;
+            end
+
+            // ASSERTION 2:
+            // 2'b11 is not a legal forwarding select in this design.
+            assert (((dut.fwdmuxa_ex == 2'b00) ||
+                     (dut.fwdmuxa_ex == 2'b01) ||
+                     (dut.fwdmuxa_ex == 2'b10)) &&
+                    ((dut.fwdmuxb_ex == 2'b00) ||
+                     (dut.fwdmuxb_ex == 2'b01) ||
+                     (dut.fwdmuxb_ex == 2'b10)))
+            else begin
+                $error("ASSERT: illegal forwarding select at t=%0t: fwdA=%b fwdB=%b",
+                       $time, dut.fwdmuxa_ex, dut.fwdmuxb_ex);
+                assertion_fail_count = assertion_fail_count + 1;
+            end
+
+            // ASSERTION 3:
+            // If the previous cycle requested a stall, PC must still be held now.
+            if (prev_stall) begin
+                assert (dut.datapath.pc_if == prev_pc_if)
+                else begin
+                    $error("ASSERT: PC changed during stall at t=%0t: previous=%0d current=%0d",
+                           $time, prev_pc_if, dut.datapath.pc_if);
+                    assertion_fail_count = assertion_fail_count + 1;
+                end
+            end
+
             // Stall: freeze PC/ID and inject a bubble through the control mux.
             if (dut.pchold_id && dut.idhold_id && dut.hazardmux_id) begin
                 saw_stall <= 1'b1;
@@ -265,6 +320,14 @@ module top_tb;
                 if (dut.datapath.pc_id == 64'd72)
                     saw_b_pc72_taken <= 1'b1;
             end
+
+            // Save the current cycle for the next temporal check.
+            prev_stall <= dut.pchold_id && dut.idhold_id && dut.hazardmux_id;
+            prev_pc_if <= dut.datapath.pc_if;
+        end
+        else begin
+            prev_stall <= 1'b0;
+            prev_pc_if <= 64'd0;
         end
 
         $display(
