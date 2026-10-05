@@ -8,6 +8,16 @@ module top_tb;
     integer pass_count;
     integer fail_count;
 
+    // Pipeline event coverage flags
+    reg saw_stall;
+    reg saw_fwd_a_mem;
+    reg saw_fwd_a_wb;
+    reg saw_fwd_b_mem;
+    reg saw_fwd_b_wb;
+    reg saw_cbz_taken;
+    reg saw_cbz_not_taken;
+    reg saw_uncond_branch;
+
     core dut(
         .clk(clk),
         .rst(rst)
@@ -32,12 +42,36 @@ module top_tb;
         end
     endtask
 
+    task check_event;
+        input [8*32-1:0] event_name;
+        input observed;
+        begin
+            if (observed === 1'b1) begin
+                $display("[PASS] %0s observed", event_name);
+                pass_count = pass_count + 1;
+            end
+            else begin
+                $display("[FAIL] %0s was not observed", event_name);
+                fail_count = fail_count + 1;
+            end
+        end
+    endtask
+
     initial clk = 1'b0;
     always #5 clk = ~clk;   // 10ns period
 
     initial begin
         pass_count = 0;
         fail_count = 0;
+
+        saw_stall = 1'b0;
+        saw_fwd_a_mem = 1'b0;
+        saw_fwd_a_wb = 1'b0;
+        saw_fwd_b_mem = 1'b0;
+        saw_fwd_b_wb = 1'b0;
+        saw_cbz_taken = 1'b0;
+        saw_cbz_not_taken = 1'b0;
+        saw_uncond_branch = 1'b0;
 
         rst = 1'b1;
         #12;
@@ -66,43 +100,74 @@ module top_tb;
         $display("=========== REGISTER CHECK =============");
         check_reg(1,  64'd2);
         check_reg(2,  64'd3);
-
         check_reg(3,  64'd5);
         check_reg(4,  64'd3);
         check_reg(5,  64'd1);
         check_reg(6,  64'd3);
-
         check_reg(9,  64'd99);
         check_reg(10, 64'd11);
-
         check_reg(12, 64'd101);
         check_reg(13, 64'd98);
-
         check_reg(14, 64'd0);
         check_reg(15, 64'd17);
         check_reg(16, 64'd0);
-
         check_reg(20, 64'd21);
         check_reg(21, 64'd23);
         check_reg(22, 64'd24);
         check_reg(23, 64'd24);
         check_reg(24, 64'd26);
 
+        $display("=========== PIPELINE EVENT CHECK ========");
+        check_event("stall",               saw_stall);
+        check_event("forward A from MEM",  saw_fwd_a_mem);
+        check_event("forward A from WB",   saw_fwd_a_wb);
+        check_event("forward B from MEM",  saw_fwd_b_mem);
+        check_event("forward B from WB",   saw_fwd_b_wb);
+        check_event("CBZ taken",           saw_cbz_taken);
+        check_event("CBZ not taken",       saw_cbz_not_taken);
+        check_event("unconditional branch", saw_uncond_branch);
+
         $display("=======================================");
 
         if (fail_count == 0) begin
-            $display("ALL TESTS PASSED (%0d/%0d)", pass_count, pass_count);
+            $display("ALL TESTS PASSED (%0d/%0d)",
+                     pass_count, pass_count + fail_count);
             $finish;
         end
         else begin
             $display("TEST FAILED: %0d passed, %0d failed",
                      pass_count, fail_count);
-            $fatal(1, "Register regression failed");
+            $fatal(1, "CPU regression failed");
         end
     end
 
-    // clk 상승엣지 기준으로 한 줄씩 출력
+    // Observe pipeline events during execution.
     always @(posedge clk) begin
+        if (!rst) begin
+            // Stall must freeze PC/ID and inject a bubble through the control mux.
+            if (dut.pchold_id && dut.idhold_id && dut.hazardmux_id)
+                saw_stall <= 1'b1;
+
+            // Forwarding mux encoding: 01 = WB, 10 = MEM.
+            if (dut.fwdmuxa_ex == 2'b10)
+                saw_fwd_a_mem <= 1'b1;
+            if (dut.fwdmuxa_ex == 2'b01)
+                saw_fwd_a_wb <= 1'b1;
+            if (dut.fwdmuxb_ex == 2'b10)
+                saw_fwd_b_mem <= 1'b1;
+            if (dut.fwdmuxb_ex == 2'b01)
+                saw_fwd_b_wb <= 1'b1;
+
+            // Only count a CBZ decision after any dependency stall is released.
+            if (dut.Branch_id && !dut.idhold_id && dut.datapath.PCSrc_id)
+                saw_cbz_taken <= 1'b1;
+            if (dut.Branch_id && !dut.idhold_id && !dut.datapath.PCSrc_id)
+                saw_cbz_not_taken <= 1'b1;
+
+            if (dut.Unconditionbranch_id && dut.datapath.PCSrc_id)
+                saw_uncond_branch <= 1'b1;
+        end
+
         $display(
             "t=%0t | pc_if=%0d | if=%h | id=%h | hold(pcid/hz)=%b%b%b | PCSrc=%b | fwdA=%b fwdB=%b | Rm_id=%0d Rn_id=%0d Rd_id=%0d | Rd_ex=%0d Rd_mem=%0d Rd_wb=%0d | MemR_ex=%b Mem2R_mem=%b RegW(mem/wb)=%b%b | result_ex=%0d result_mem=%0d wbdata=%0d",
             $time,
