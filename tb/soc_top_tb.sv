@@ -4,17 +4,14 @@ module soc_top_tb;
 
     reg clk;
     reg rst;
-    
-    // p/f counting integer
+
     integer pass_count;
     integer fail_count;
     integer assertion_fail_count;
 
-    // 현재 cycle과 다음 cycel에서 pc가 그대로인지 체크하기위한 reg
     reg prev_stall;
     reg [63:0] prev_pc_if;
 
-    // event flag용
     reg saw_stall;
     reg saw_fwd_a_mem;
     reg saw_fwd_a_wb;
@@ -24,14 +21,12 @@ module soc_top_tb;
     reg saw_cbz_not_taken;
     reg saw_uncond_branch;
 
-    // event counting integer
     integer stall_count;
     integer fwd_a_mem_count;
     integer fwd_a_wb_count;
     integer fwd_b_mem_count;
     integer fwd_b_wb_count;
 
-    // pc별 flag 발생여부 reg
     reg saw_stall_pc20;
     reg saw_stall_pc32;
     reg saw_stall_pc48;
@@ -47,26 +42,26 @@ module soc_top_tb;
         .rst(rst)
     );
 
-    task check_reg; //reg[i]==expection 검사용 함수
+    task check_reg;
         input integer reg_num;
         input [63:0] expected;
         begin
-            if (dut.datapath.REG.registers[reg_num] === expected) begin // (===로 dont care값 제외하고 정확히 보기)
+            if (dut.core.datapath.REG.registers[reg_num] === expected) begin
                 $display("[PASS] x%0d = %0d", reg_num,
-                         dut.datapath.REG.registers[reg_num]);
+                         dut.core.datapath.REG.registers[reg_num]);
                 pass_count = pass_count + 1;
             end
             else begin
                 $display("[FAIL] x%0d expected=%0d actual=%0d",
                          reg_num,
                          expected,
-                         dut.datapath.REG.registers[reg_num]);
+                         dut.core.datapath.REG.registers[reg_num]);
                 fail_count = fail_count + 1;
             end
         end
     endtask
 
-    task check_event; //위에 설정한 flag 검사용 함수
+    task check_event;
         input [8*40-1:0] event_name;
         input observed;
         begin
@@ -81,7 +76,7 @@ module soc_top_tb;
         end
     endtask
 
-    task check_count; //event counting용 함수
+    task check_count;
         input [8*40-1:0] event_name;
         input integer actual;
         input integer expected;
@@ -99,7 +94,7 @@ module soc_top_tb;
     endtask
 
     initial clk = 1'b0;
-    always #5 clk = ~clk;   // 10ns period (100Mhz)
+    always #5 clk = ~clk;
 
     initial begin
         pass_count = 0;
@@ -138,25 +133,24 @@ module soc_top_tb;
         #12;
         rst = 1'b0;
 
-        // Run long enough to reach instructionmemory[18] and observe B #0.
         #500;
 
         $display("========== FINAL PIPELINE STATE ==========");
-        $display("pc_if            = %0d", dut.datapath.pc_if);
-        $display("instruction_if   = %h", dut.datapath.instruction_if);
-        $display("instruction_id   = %h", dut.instruction_id);
-        $display("PCSrc_id         = %b", dut.datapath.PCSrc_id);
-        $display("pchold_id        = %b", dut.pchold_id);
-        $display("idhold_id        = %b", dut.idhold_id);
-        $display("hazardmux_id     = %b", dut.hazardmux_id);
-        $display("fwdmuxa_ex       = %b", dut.fwdmuxa_ex);
-        $display("fwdmuxb_ex       = %b", dut.fwdmuxb_ex);
-        $display("Rd_ex            = %0d", dut.Rd_ex);
-        $display("Rd_mem           = %0d", dut.Rd_mem);
-        $display("Rd_wb            = %0d", dut.Rd_wb);
-        $display("result_ex        = %0d", dut.datapath.result_ex);
-        $display("result_mem       = %0d", dut.datapath.result_mem);
-        $display("Regwritedata_wb  = %0d", dut.datapath.Regwritedata_wb);
+        $display("pc_if            = %0d", dut.core.datapath.pc_if);
+        $display("instruction_if   = %h", dut.core.datapath.instruction_if);
+        $display("instruction_id   = %h", dut.core.instruction_id);
+        $display("PCSrc_id         = %b", dut.core.datapath.PCSrc_id);
+        $display("pchold_id        = %b", dut.core.pchold_id);
+        $display("idhold_id        = %b", dut.core.idhold_id);
+        $display("hazardmux_id     = %b", dut.core.hazardmux_id);
+        $display("fwdmuxa_ex       = %b", dut.core.fwdmuxa_ex);
+        $display("fwdmuxb_ex       = %b", dut.core.fwdmuxb_ex);
+        $display("Rd_ex            = %0d", dut.core.Rd_ex);
+        $display("Rd_mem           = %0d", dut.core.Rd_mem);
+        $display("Rd_wb            = %0d", dut.core.Rd_wb);
+        $display("result_ex        = %0d", dut.core.datapath.result_ex);
+        $display("result_mem       = %0d", dut.core.datapath.result_mem);
+        $display("Regwritedata_wb  = %0d", dut.core.datapath.Regwritedata_wb);
 
         $display("=========== REGISTER CHECK =============");
         check_reg(1,  64'd2);
@@ -230,50 +224,42 @@ module soc_top_tb;
         end
     end
 
-    // Observe pipeline events and check runtime invariants.
     always @(posedge clk) begin
         if (!rst) begin
-            // ASSERTION 1:
-            // Stall control signals must be consistent: either 000 or 111.
-            assert (({dut.pchold_id, dut.idhold_id, dut.hazardmux_id} == 3'b000) ||
-                    ({dut.pchold_id, dut.idhold_id, dut.hazardmux_id} == 3'b111))
+            assert (({dut.core.pchold_id, dut.core.idhold_id, dut.core.hazardmux_id} == 3'b000) ||
+                    ({dut.core.pchold_id, dut.core.idhold_id, dut.core.hazardmux_id} == 3'b111))
             else begin
                 $error("ASSERT: inconsistent stall controls at t=%0t: pchold=%b idhold=%b hazardmux=%b",
-                       $time, dut.pchold_id, dut.idhold_id, dut.hazardmux_id);
+                       $time, dut.core.pchold_id, dut.core.idhold_id, dut.core.hazardmux_id);
                 assertion_fail_count = assertion_fail_count + 1;
             end
 
-            // ASSERTION 2:
-            // 2'b11 is not a legal forwarding select in this design.
-            assert (((dut.fwdmuxa_ex == 2'b00) ||
-                     (dut.fwdmuxa_ex == 2'b01) ||
-                     (dut.fwdmuxa_ex == 2'b10)) &&
-                    ((dut.fwdmuxb_ex == 2'b00) ||
-                     (dut.fwdmuxb_ex == 2'b01) ||
-                     (dut.fwdmuxb_ex == 2'b10)))
+            assert (((dut.core.fwdmuxa_ex == 2'b00) ||
+                     (dut.core.fwdmuxa_ex == 2'b01) ||
+                     (dut.core.fwdmuxa_ex == 2'b10)) &&
+                    ((dut.core.fwdmuxb_ex == 2'b00) ||
+                     (dut.core.fwdmuxb_ex == 2'b01) ||
+                     (dut.core.fwdmuxb_ex == 2'b10)))
             else begin
                 $error("ASSERT: illegal forwarding select at t=%0t: fwdA=%b fwdB=%b",
-                       $time, dut.fwdmuxa_ex, dut.fwdmuxb_ex);
+                       $time, dut.core.fwdmuxa_ex, dut.core.fwdmuxb_ex);
                 assertion_fail_count = assertion_fail_count + 1;
             end
 
-            // ASSERTION 3:
-            // If the previous cycle requested a stall, PC must still be held now.
             if (prev_stall) begin
-                assert (dut.datapath.pc_if == prev_pc_if)
+                assert (dut.core.datapath.pc_if == prev_pc_if)
                 else begin
                     $error("ASSERT: PC changed during stall at t=%0t: previous=%0d current=%0d",
-                           $time, prev_pc_if, dut.datapath.pc_if);
+                           $time, prev_pc_if, dut.core.datapath.pc_if);
                     assertion_fail_count = assertion_fail_count + 1;
                 end
             end
 
-            // Stall: freeze PC/ID and inject a bubble through the control mux.
-            if (dut.pchold_id && dut.idhold_id && dut.hazardmux_id) begin
+            if (dut.core.pchold_id && dut.core.idhold_id && dut.core.hazardmux_id) begin
                 saw_stall <= 1'b1;
                 stall_count <= stall_count + 1;
 
-                case (dut.datapath.pc_id)
+                case (dut.core.datapath.pc_id)
                     64'd20: saw_stall_pc20 <= 1'b1;
                     64'd32: saw_stall_pc32 <= 1'b1;
                     64'd48: saw_stall_pc48 <= 1'b1;
@@ -282,49 +268,46 @@ module soc_top_tb;
                 endcase
             end
 
-            // Forwarding mux encoding: 01 = WB, 10 = MEM.
-            if (dut.fwdmuxa_ex == 2'b10) begin
+            if (dut.core.fwdmuxa_ex == 2'b10) begin
                 saw_fwd_a_mem <= 1'b1;
                 fwd_a_mem_count <= fwd_a_mem_count + 1;
             end
-            if (dut.fwdmuxa_ex == 2'b01) begin
+            if (dut.core.fwdmuxa_ex == 2'b01) begin
                 saw_fwd_a_wb <= 1'b1;
                 fwd_a_wb_count <= fwd_a_wb_count + 1;
             end
-            if (dut.fwdmuxb_ex == 2'b10) begin
+            if (dut.core.fwdmuxb_ex == 2'b10) begin
                 saw_fwd_b_mem <= 1'b1;
                 fwd_b_mem_count <= fwd_b_mem_count + 1;
             end
-            if (dut.fwdmuxb_ex == 2'b01) begin
+            if (dut.core.fwdmuxb_ex == 2'b01) begin
                 saw_fwd_b_wb <= 1'b1;
                 fwd_b_wb_count <= fwd_b_wb_count + 1;
             end
 
-            // Branch checks at the exact ID-stage PC of the directed program.
-            if (dut.Branch_id && !dut.idhold_id) begin
-                if (dut.datapath.PCSrc_id) begin
+            if (dut.core.Branch_id && !dut.core.idhold_id) begin
+                if (dut.core.datapath.PCSrc_id) begin
                     saw_cbz_taken <= 1'b1;
-                    if (dut.datapath.pc_id == 64'd32)
+                    if (dut.core.datapath.pc_id == 64'd32)
                         saw_cbz_pc32_taken <= 1'b1;
-                    if (dut.datapath.pc_id == 64'd60)
+                    if (dut.core.datapath.pc_id == 64'd60)
                         saw_cbz_pc60_taken <= 1'b1;
                 end
                 else begin
                     saw_cbz_not_taken <= 1'b1;
-                    if (dut.datapath.pc_id == 64'd48)
+                    if (dut.core.datapath.pc_id == 64'd48)
                         saw_cbz_pc48_not_taken <= 1'b1;
                 end
             end
 
-            if (dut.Unconditionbranch_id && dut.datapath.PCSrc_id) begin
+            if (dut.core.Unconditionbranch_id && dut.core.datapath.PCSrc_id) begin
                 saw_uncond_branch <= 1'b1;
-                if (dut.datapath.pc_id == 64'd72)
+                if (dut.core.datapath.pc_id == 64'd72)
                     saw_b_pc72_taken <= 1'b1;
             end
 
-            // Save the current cycle for the next temporal check.
-            prev_stall <= dut.pchold_id && dut.idhold_id && dut.hazardmux_id;
-            prev_pc_if <= dut.datapath.pc_if;
+            prev_stall <= dut.core.pchold_id && dut.core.idhold_id && dut.core.hazardmux_id;
+            prev_pc_if <= dut.core.datapath.pc_if;
         end
         else begin
             prev_stall <= 1'b0;
@@ -334,29 +317,29 @@ module soc_top_tb;
         $display(
             "t=%0t | pc_if=%0d | pc_id=%0d | if=%h | id=%h | hold(pcid/hz)=%b%b%b | PCSrc=%b | fwdA=%b fwdB=%b | Rm_id=%0d Rn_id=%0d Rd_id=%0d | Rd_ex=%0d Rd_mem=%0d Rd_wb=%0d | MemR_ex=%b Mem2R_mem=%b RegW(mem/wb)=%b%b | result_ex=%0d result_mem=%0d wbdata=%0d",
             $time,
-            dut.datapath.pc_if,
-            dut.datapath.pc_id,
-            dut.datapath.instruction_if,
-            dut.instruction_id,
-            dut.pchold_id,
-            dut.idhold_id,
-            dut.hazardmux_id,
-            dut.datapath.PCSrc_id,
-            dut.fwdmuxa_ex,
-            dut.fwdmuxb_ex,
-            dut.Rm_id,
-            dut.Rn_id,
-            dut.datapath.Rd_id,
-            dut.Rd_ex,
-            dut.Rd_mem,
-            dut.Rd_wb,
-            dut.Memread_ex,
-            dut.MemtoReg_mem,
-            dut.Regwrite_mem,
-            dut.Regwrite_wb,
-            dut.datapath.result_ex,
-            dut.datapath.result_mem,
-            dut.datapath.Regwritedata_wb
+            dut.core.datapath.pc_if,
+            dut.core.datapath.pc_id,
+            dut.core.datapath.instruction_if,
+            dut.core.instruction_id,
+            dut.core.pchold_id,
+            dut.core.idhold_id,
+            dut.core.hazardmux_id,
+            dut.core.datapath.PCSrc_id,
+            dut.core.fwdmuxa_ex,
+            dut.core.fwdmuxb_ex,
+            dut.core.Rm_id,
+            dut.core.Rn_id,
+            dut.core.datapath.Rd_id,
+            dut.core.Rd_ex,
+            dut.core.Rd_mem,
+            dut.core.Rd_wb,
+            dut.core.Memread_ex,
+            dut.core.MemtoReg_mem,
+            dut.core.Regwrite_mem,
+            dut.core.Regwrite_wb,
+            dut.core.datapath.result_ex,
+            dut.core.datapath.result_mem,
+            dut.core.datapath.Regwritedata_wb
         );
     end
 
