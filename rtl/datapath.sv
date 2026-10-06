@@ -17,7 +17,7 @@
      output wire [63:0] dmem_wdata,
      output wire        dmem_we,
      output wire        dmem_re,
-     input  wire [63:0] dmem_rdata
+     input  wire [63:0] dmem_rdata,
 
      output wire [4:0] Rn_id, Rm_id,
      output logic [31:0] instruction_id,
@@ -328,7 +328,7 @@
      assign dmem_wdata = Readdata2_mem_mux;
      assign dmem_we    = Memwrite_mem;
      assign dmem_re    = Memread_mem;
-     
+
      assign Readmemdata_mem = dmem_rdata;
 
 

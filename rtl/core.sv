@@ -2,7 +2,7 @@
 
      module core(
      input wire clk,
-     input wire rst
+     input wire rst,
      //instruction memory interface
      output wire [63:0] imem_addr,
      input  wire [31:0] imem_rdata,
