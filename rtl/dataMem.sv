@@ -45,7 +45,7 @@ module dataMem (
         datamemory[31] = 64'd32;
     end
 
-    assign Readmemdata = Memread ? datamemory[addr] : 64'd0;
+    assign Memreaddata = Memread ? datamemory[addr] : 64'd0;
 
     always @(posedge clk ) begin
         if(Memwrite)begin
