@@ -24,7 +24,8 @@ module soc_top (
                .dmem_rdata(dmem_rdata)
      );
 
-    InstructionMem IM(.pc(imem_addr), .instruction(imem_rdata));
+    InstructionMem IM(.pc(imem_addr), 
+                      .instruction(imem_rdata));
 
     dataMem DM(.clk(clk),
                .Address(dmem_addr),
