@@ -4,7 +4,7 @@ module dataMem (
     input wire [63:0] Memwritedata,
     input wire Memwrite,
     input wire Memread,
-    output wire [63:0] Readmemdata
+    output wire [63:0] Memreaddata
 );
     reg [63:0] datamemory [31:0]; // 8byte 32개 256byte
     wire [4:0] addr;

@@ -13,10 +13,9 @@ module soc_top (
     wire        dmem_re;
 
 
-    core core1(.clk(clk),
+    core core(.clk(clk),
                .rst(rst),
                .imem_addr(imem_addr),
-               .imem_addr(imem_add),
                .imem_rdata(imem_rdata),
                .dmem_addr(dmem_addr),
                .dmem_wdata(dmem_wdata),
@@ -27,7 +26,12 @@ module soc_top (
 
     InstructionMem IM(.pc(imem_addr), .instruction(imem_rdata));
 
-    dataMem DM(.clk(clk), .Address(dmem_addr), .Memwritedata(dmem_wdata), .Memwrite(dmem_we), .Memread(dmem_re), .MemReaddata(dmem_rdata))
+    dataMem DM(.clk(clk),
+               .Address(dmem_addr),
+               .Memwritedata(dmem_wdata),
+               .Memwrite(dmem_we),
+               .Memread(dmem_re),
+               .Memreaddata(dmem_rdata));
     
 
 endmodule
