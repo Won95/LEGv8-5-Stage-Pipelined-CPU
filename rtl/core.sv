@@ -3,6 +3,15 @@
      module core(
      input wire clk,
      input wire rst
+     //instruction memory interface
+     output wire [63:0] imem_addr,
+     input  wire [31:0] imem_rdata,
+     //data memory interface
+     output wire [63:0] dmem_addr,
+     output wire [63:0] dmem_wdata,
+     output wire        dmem_we,
+     output wire        dmem_re,
+     input  wire [63:0] dmem_rdata
      );
      
      // ctrl nets
@@ -36,6 +45,14 @@
                     .pchold_id(pchold_id),
                     .muxa(fwdmuxa_ex),
                     .muxb(fwdmuxb_ex),
+                    .imem_addr(imem_addr),
+                    .imem_rdata(imem_rdata),
+
+                    .dmem_addr(dmem_addr),
+                    .dmem_wdata(dmem_wdata),
+                    .dmem_we(dmem_we),
+                    .dmem_re(dmem_re),
+                    .dmem_rdata(dmem_rdata),
                     .Rn_id(Rn_id),
                     .Rm_id(Rm_id),
                     .instruction_id(instruction_id),

@@ -7,6 +7,18 @@
      input wire [3:0] ALUop_id,
      input logic hazardmux_id, idhold_id, pchold_id,
      input logic [1:0] muxa, muxb,
+     
+     // Instruction memory interface
+     output wire [63:0] imem_addr,
+     input  wire [31:0] imem_rdata,
+
+     // Data memory interface
+     output wire [63:0] dmem_addr,
+     output wire [63:0] dmem_wdata,
+     output wire        dmem_we,
+     output wire        dmem_re,
+     input  wire [63:0] dmem_rdata
+
      output wire [4:0] Rn_id, Rm_id,
      output logic [31:0] instruction_id,
      output logic [4:0] Rd_ex, Rd_mem, 
@@ -192,12 +204,11 @@
                          .pc_next(pc_next),
                          .pchold(pchold_id),
                          .pc(pc_if));
-
+     
      wire [31:0] instruction_if;
 
-     (* KEEP_HIERARCHY="yes" *)
-     InstructionMem IM(.pc(pc_if),
-                         .instruction(instruction_if));
+     assign imem_addr      = pc_if;
+     assign instruction_if = imem_rdata;
 
      /*==============
           ID stage
@@ -313,13 +324,12 @@
      reg [63:0] Readdata2_mem_mux;
      wire [63:0] Readmemdata_mem;
 
-     (* KEEP_HIERARCHY="yes" *)         
-     dataMem DM(.clk(clk),
-                    .Address(result_mem),
-                    .Memwritedata(Readdata2_mem_mux),
-                    .Memwrite(Memwrite_mem),
-                    .Memread(Memread_mem),
-                    .Readmemdata(Readmemdata_mem));
+     assign dmem_addr  = result_mem;
+     assign dmem_wdata = Readdata2_mem_mux;
+     assign dmem_we    = Memwrite_mem;
+     assign dmem_re    = Memread_mem;
+     
+     assign Readmemdata_mem = dmem_rdata;
 
 
      /*==============
