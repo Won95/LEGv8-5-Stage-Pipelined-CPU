@@ -278,21 +278,24 @@ module soc_top_tb;
                 endcase
             end
 
-            if (dut.core.fwdmuxa_ex == 2'b10) begin
-                saw_fwd_a_mem <= 1'b1;
-                fwd_a_mem_count <= fwd_a_mem_count + 1;
-            end
-            if (dut.core.fwdmuxa_ex == 2'b01) begin
-                saw_fwd_a_wb <= 1'b1;
-                fwd_a_wb_count <= fwd_a_wb_count + 1;
-            end
-            if (dut.core.fwdmuxb_ex == 2'b10) begin
-                saw_fwd_b_mem <= 1'b1;
-                fwd_b_mem_count <= fwd_b_mem_count + 1;
-            end
-            if (dut.core.fwdmuxb_ex == 2'b01) begin
-                saw_fwd_b_wb <= 1'b1;
-                fwd_b_wb_count <= fwd_b_wb_count + 1;
+            // memory wait 동안에는 같은 EX stage가 hold되므로 같은 forwarding을 중복 카운트하지 않는다.
+            if (!dut.core.datapath.mem_wait) begin
+                if (dut.core.fwdmuxa_ex == 2'b10) begin
+                    saw_fwd_a_mem <= 1'b1;
+                    fwd_a_mem_count <= fwd_a_mem_count + 1;
+                end
+                if (dut.core.fwdmuxa_ex == 2'b01) begin
+                    saw_fwd_a_wb <= 1'b1;
+                    fwd_a_wb_count <= fwd_a_wb_count + 1;
+                end
+                if (dut.core.fwdmuxb_ex == 2'b10) begin
+                    saw_fwd_b_mem <= 1'b1;
+                    fwd_b_mem_count <= fwd_b_mem_count + 1;
+                end
+                if (dut.core.fwdmuxb_ex == 2'b01) begin
+                    saw_fwd_b_wb <= 1'b1;
+                    fwd_b_wb_count <= fwd_b_wb_count + 1;
+                end
             end
 
             if (dut.core.Branch_id && !dut.core.idhold_id) begin
