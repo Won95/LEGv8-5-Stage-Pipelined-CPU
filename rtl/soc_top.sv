@@ -31,7 +31,9 @@ module soc_top (
         .instruction(imem_rdata)
     );
 
-    sram_wrapper data_sram(
+    sram_wrapper32b instruction_sram();
+
+    sram_wrapper64b data_sram(
         .clk(clk),
         .rst(rst),
         .addr(dmem_addr),

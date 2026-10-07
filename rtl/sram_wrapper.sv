@@ -1,4 +1,4 @@
-module sram_wrapper (
+module sram_wrapper64b (
     input  wire        clk,
     input  wire        rst,
 
