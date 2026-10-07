@@ -25,14 +25,17 @@ module soc_top (
      );
 
     InstructionMem IM(.pc(imem_addr), 
-                      .instruction(imem_rdata));
+                      .instruction(imem_rdata)
+    );
 
-    dataMem DM(.clk(clk),
-               .Address(dmem_addr),
-               .Memwritedata(dmem_wdata),
-               .Memwrite(dmem_we),
-               .Memread(dmem_re),
-               .Memreaddata(dmem_rdata));
+    sram_wrapper data_sram(.clk(clk),
+                           .addr(dmem_addr),
+                           .wdata(dmem_wdata),
+                           .we(dmem_we),
+                           .re(dmem_re),
+                           .rdata(dmem_rdata)
+    );
+
     
 
 endmodule
