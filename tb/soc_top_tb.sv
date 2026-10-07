@@ -129,6 +129,10 @@ module soc_top_tb;
         saw_cbz_pc60_taken = 1'b0;
         saw_b_pc72_taken = 1'b0;
 
+        // simulation preload: original behavioral dataMem[12] = 64'd99
+        dut.data_sram.SRAM_LOW.mem[12]  = 32'd99;
+        dut.data_sram.SRAM_HIGH.mem[12] = 32'd0;
+
         rst = 1'b1;
         #12;
         rst = 1'b0;
