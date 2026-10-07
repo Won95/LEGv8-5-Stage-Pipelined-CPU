@@ -130,11 +130,17 @@ module soc_top_tb;
         saw_b_pc72_taken = 1'b0;
 
         // simulation preload: original behavioral dataMem[12] = 64'd99
+        rst = 1'b1;
+
+        #1;
         dut.data_sram.SRAM_LOW.mem[12]  = 32'd99;
         dut.data_sram.SRAM_HIGH.mem[12] = 32'd0;
 
-        rst = 1'b1;
-        #12;
+        $display("SRAM PRELOAD CHECK: HIGH=%0d LOW=%0d",
+                dut.data_sram.SRAM_HIGH.mem[12],
+                dut.data_sram.SRAM_LOW.mem[12]);
+
+        #11;
         rst = 1'b0;
 
         #500;
