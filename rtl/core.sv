@@ -1,106 +1,118 @@
-     `timescale 1ns / 1ps
+`timescale 1ns / 1ps
 
-     module core(
-     input wire clk,
-     input wire rst,
-     //instruction memory interface
-     output wire [63:0] imem_addr,
-     input  wire [31:0] imem_rdata,
-     //data memory interface
-     output wire [63:0] dmem_addr,
-     output wire [63:0] dmem_wdata,
-     output wire        dmem_we,
-     output wire        dmem_re,
-     input  wire [63:0] dmem_rdata
-     );
-     
-     // ctrl nets
-     wire [31:0] instruction_id;
-     wire Reg2Loc_id, Unconditionbranch_id, Branch_id, Memread_id, MemtoReg_id, Memwrite_id, ALUSrc_id, Regwrite_id; 
-     wire [3:0] ALUop_id;
-     
-     // hazard nets
-     wire [4:0] Rd_ex, Rd_mem,Rn_id,Rm_id;
-     wire Memread_ex, Regwrite_ex, MemtoReg_mem, hazardmux_id, idhold_id, pchold_id;
-     
-     // fwd nets
-     wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
-     wire [4:0] Rm_ex, Rn_ex, Rd_wb;
-     wire Regwrite_mem, Regwrite_wb;
+module core(
+    input wire clk,
+    input wire rst,
 
+    // instruction memory interface
+    output wire [63:0] imem_addr,
+    input  wire [31:0] imem_rdata,
 
-     datapath datapath (.clk(clk),
-                    .rst(rst),
-                    .Reg2Loc_id(Reg2Loc_id),
-                    .Unconditionbranch_id(Unconditionbranch_id),
-                    .Branch_id(Branch_id),
-                    .Memread_id(Memread_id),
-                    .MemtoReg_id(MemtoReg_id),
-                    .Memwrite_id(Memwrite_id),
-                    .ALUSrc_id(ALUSrc_id),
-                    .Regwrite_id(Regwrite_id),
-                    .ALUop_id(ALUop_id),
-                    .hazardmux_id(hazardmux_id),
-                    .idhold_id(idhold_id),
-                    .pchold_id(pchold_id),
-                    .muxa(fwdmuxa_ex),
-                    .muxb(fwdmuxb_ex),
-                    .imem_addr(imem_addr),
-                    .imem_rdata(imem_rdata),
+    // data memory request/ack interface
+    output wire [63:0] dmem_addr,
+    output wire [63:0] dmem_wdata,
+    output wire        dmem_we,
+    output wire        dmem_re,
+    input  wire        dmem_ready,
+    input  wire [63:0] dmem_rdata
+);
 
-                    .dmem_addr(dmem_addr),
-                    .dmem_wdata(dmem_wdata),
-                    .dmem_we(dmem_we),
-                    .dmem_re(dmem_re),
-                    .dmem_rdata(dmem_rdata),
-                    .Rn_id(Rn_id),
-                    .Rm_id(Rm_id),
-                    .instruction_id(instruction_id),
-                    .Rd_ex(Rd_ex),
-                    .Rd_mem(Rd_mem),
-                    .Memread_ex(Memread_ex),
-                    .Regwrite_ex(Regwrite_ex),
-                    .MemtoReg_mem(MemtoReg_mem),
-                    .Rm_ex(Rm_ex),
-                    .Rn_ex(Rn_ex),
-                    .Rd_wb(Rd_wb),
-                    .Regwrite_mem(Regwrite_mem),
-                    .Regwrite_wb(Regwrite_wb)
-                    );
-     
-     (* KEEP_HIERARCHY="yes" *)                  
-     Control ctrl(.instruction(instruction_id),
-                    .Reg2Loc(Reg2Loc_id),
-                    .Unconditionbranch(Unconditionbranch_id),
-                    .Branch(Branch_id),
-                    .Memread(Memread_id),
-                    .MemtoReg(MemtoReg_id),
-                    .ALUop(ALUop_id),
-                    .Memwrite(Memwrite_id),
-                    .ALUSrc(ALUSrc_id),
-                    .Regwrite(Regwrite_id));
-     
-     (* KEEP_HIERARCHY ="yes" *)
-     hazarddetectionunit hazard(.Rd_ex(Rd_ex),
-                                .Memread_ex(Memread_ex),
-                                .Regwrite_ex(Regwrite_ex),
-                                .Rd_mem(Rd_mem),
-                                .MemtoReg_mem(MemtoReg_mem),
-                                .Rn_id(Rn_id),
-                                .Rm_id(Rm_id),
-                                .Branch_id(Branch_id),
-                                .hazardmux_id(hazardmux_id),
-                                .idhold(idhold_id),
-                                .pchold(pchold_id));
+    // ctrl nets
+    wire [31:0] instruction_id;
+    wire Reg2Loc_id, Unconditionbranch_id, Branch_id, Memread_id, MemtoReg_id, Memwrite_id, ALUSrc_id, Regwrite_id;
+    wire [3:0] ALUop_id;
 
-     (* KEEP_HIERARCHY ="yes" *)
-     forwardingunit fwd(.Rm_ex(Rm_ex),
-                         .Rn_ex(Rn_ex),
-                         .Rd_mem(Rd_mem),
-                         .Rd_wb(Rd_wb),
-                         .Regwrite_mem(Regwrite_mem),
-                         .Regwrite_wb(Regwrite_wb),
-                         .muxa(fwdmuxa_ex),
-                         .muxb(fwdmuxb_ex));
+    // hazard nets
+    wire [4:0] Rd_ex, Rd_mem, Rn_id, Rm_id;
+    wire Memread_ex, Regwrite_ex, MemtoReg_mem, hazardmux_id, idhold_id, pchold_id;
+
+    // fwd nets
+    wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
+    wire [4:0] Rm_ex, Rn_ex, Rd_wb;
+    wire Regwrite_mem, Regwrite_wb;
+
+    datapath datapath (
+        .clk(clk),
+        .rst(rst),
+        .Reg2Loc_id(Reg2Loc_id),
+        .Unconditionbranch_id(Unconditionbranch_id),
+        .Branch_id(Branch_id),
+        .Memread_id(Memread_id),
+        .MemtoReg_id(MemtoReg_id),
+        .Memwrite_id(Memwrite_id),
+        .ALUSrc_id(ALUSrc_id),
+        .Regwrite_id(Regwrite_id),
+        .ALUop_id(ALUop_id),
+        .hazardmux_id(hazardmux_id),
+        .idhold_id(idhold_id),
+        .pchold_id(pchold_id),
+        .muxa(fwdmuxa_ex),
+        .muxb(fwdmuxb_ex),
+
+        .imem_addr(imem_addr),
+        .imem_rdata(imem_rdata),
+
+        .dmem_addr(dmem_addr),
+        .dmem_wdata(dmem_wdata),
+        .dmem_we(dmem_we),
+        .dmem_re(dmem_re),
+        .dmem_ready(dmem_ready),
+        .dmem_rdata(dmem_rdata),
+
+        .Rn_id(Rn_id),
+        .Rm_id(Rm_id),
+        .instruction_id(instruction_id),
+        .Rd_ex(Rd_ex),
+        .Rd_mem(Rd_mem),
+        .Memread_ex(Memread_ex),
+        .Regwrite_ex(Regwrite_ex),
+        .MemtoReg_mem(MemtoReg_mem),
+        .Rm_ex(Rm_ex),
+        .Rn_ex(Rn_ex),
+        .Rd_wb(Rd_wb),
+        .Regwrite_mem(Regwrite_mem),
+        .Regwrite_wb(Regwrite_wb)
+    );
+
+    (* KEEP_HIERARCHY="yes" *)
+    Control ctrl(
+        .instruction(instruction_id),
+        .Reg2Loc(Reg2Loc_id),
+        .Unconditionbranch(Unconditionbranch_id),
+        .Branch(Branch_id),
+        .Memread(Memread_id),
+        .MemtoReg(MemtoReg_id),
+        .ALUop(ALUop_id),
+        .Memwrite(Memwrite_id),
+        .ALUSrc(ALUSrc_id),
+        .Regwrite(Regwrite_id)
+    );
+
+    (* KEEP_HIERARCHY="yes" *)
+    hazarddetectionunit hazard(
+        .Rd_ex(Rd_ex),
+        .Memread_ex(Memread_ex),
+        .Regwrite_ex(Regwrite_ex),
+        .Rd_mem(Rd_mem),
+        .MemtoReg_mem(MemtoReg_mem),
+        .Rn_id(Rn_id),
+        .Rm_id(Rm_id),
+        .Branch_id(Branch_id),
+        .hazardmux_id(hazardmux_id),
+        .idhold(idhold_id),
+        .pchold(pchold_id)
+    );
+
+    (* KEEP_HIERARCHY="yes" *)
+    forwardingunit fwd(
+        .Rm_ex(Rm_ex),
+        .Rn_ex(Rn_ex),
+        .Rd_mem(Rd_mem),
+        .Rd_wb(Rd_wb),
+        .Regwrite_mem(Regwrite_mem),
+        .Regwrite_wb(Regwrite_wb),
+        .muxa(fwdmuxa_ex),
+        .muxb(fwdmuxb_ex)
+    );
 
 endmodule
