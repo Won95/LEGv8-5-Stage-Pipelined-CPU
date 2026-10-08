@@ -8,12 +8,19 @@ module sram_wrapper32b (
     input  wire [31:0] prog_wdata,
     output wire        prog_ready,
 
-    // CPU instruction fetch path (byte address)
-    input  wire        cpu_re,
-    input  wire [63:0] cpu_addr,
-    output wire        cpu_rvalid,
-    output wire [63:0] cpu_raddr,
-    output wire [31:0] cpu_rdata
+    // CPU instruction request channel
+    input  wire        req_valid,
+    output wire        req_ready,
+    input  wire [63:0] req_addr,
+
+    // CPU instruction response channel
+    output wire        rsp_valid,
+    input  wire        rsp_ready,
+    output wire [63:0] rsp_addr,
+    output wire [31:0] rsp_data,
+
+    // Taken branch: discard all outstanding sequential fetches.
+    input  wire        flush
 );
 
     localparam IDLE = 1'b0;
@@ -25,8 +32,9 @@ module sram_wrapper32b (
     wire [31:0] unused_dout0;
     wire [31:0] dout1;
 
-    // Loader write request는 한 번만 SRAM port0에 넣고,
-    // 다음 cycle에 완료 응답을 돌려준다.
+    /*==============================
+      Loader write port
+      ==============================*/
     assign prog_fire  = (prog_state == IDLE) && prog_valid;
     assign prog_ready = (prog_state == WAIT);
 
@@ -50,26 +58,116 @@ module sram_wrapper32b (
         end
     end
 
-    // Port1은 pipelined instruction read port로 사용한다.
-    // address를 받은 다음 cycle에 rvalid/raddr/rdata가 한 세트로 유효하다.
-    reg        cpu_re_d;
-    reg [63:0] cpu_addr_d;
+    /*==============================
+      CPU pipelined read port
+
+      SRAM read latency가 1 cycle이므로 accepted request는 먼저
+      inflight slot에 들어간다. CPU가 갑자기 backpressure를 걸어도
+      이미 SRAM에 들어간 response를 잃지 않도록 response queue는
+      2-entry(response + skid)로 둔다.
+      ==============================*/
+    reg        inflight_valid;
+    reg [63:0] inflight_addr;
+
+    reg [1:0]  rsp_count;
+    reg [63:0] rsp_addr0, rsp_addr1;
+    reg [31:0] rsp_data0, rsp_data1;
+
+    wire rsp_fire;
+    wire req_fire;
+    wire arrival;
+    wire [2:0] outstanding;
+
+    assign rsp_valid = (rsp_count != 2'd0);
+    assign rsp_addr  = rsp_addr0;
+    assign rsp_data  = rsp_data0;
+    assign rsp_fire  = rsp_valid && rsp_ready;
+
+    // queue에 저장된 response + SRAM에서 돌아올 inflight response를 합쳐
+    // 최대 2개까지만 outstanding으로 허용한다.
+    assign outstanding = {1'b0, rsp_count} + inflight_valid;
+
+    // 현재 response를 같은 cycle에 consume한다면 그 자리까지 고려해
+    // 다음 request를 받을 수 있다.
+    assign req_ready = !flush && ((outstanding < 3'd2) || rsp_fire);
+    assign req_fire  = req_valid && req_ready;
+
+    // 이전 cycle에 SRAM으로 넣은 request의 data가 현재 cycle에 유효하다.
+    assign arrival = inflight_valid;
 
     always @(posedge clk) begin
-        if (rst) begin
-            cpu_re_d   <= 1'b0;
-            cpu_addr_d <= 64'd0;
+        if (rst || flush) begin
+            inflight_valid <= 1'b0;
+            inflight_addr  <= 64'd0;
+
+            rsp_count <= 2'd0;
+            rsp_addr0 <= 64'd0;
+            rsp_addr1 <= 64'd0;
+            rsp_data0 <= 32'd0;
+            rsp_data1 <= 32'd0;
         end
         else begin
-            cpu_re_d <= cpu_re;
-            if (cpu_re)
-                cpu_addr_d <= cpu_addr;
+            // Current accepted request becomes next cycle's inflight response.
+            inflight_valid <= req_fire;
+            if (req_fire)
+                inflight_addr <= req_addr;
+
+            // Response queue update. dout1 corresponds to inflight_addr.
+            case (rsp_count)
+                2'd0: begin
+                    if (arrival) begin
+                        rsp_addr0 <= inflight_addr;
+                        rsp_data0 <= dout1;
+                        rsp_count <= 2'd1;
+                    end
+                end
+
+                2'd1: begin
+                    case ({rsp_fire, arrival})
+                        2'b00: begin
+                            rsp_count <= 2'd1;
+                        end
+
+                        2'b01: begin
+                            rsp_addr1 <= inflight_addr;
+                            rsp_data1 <= dout1;
+                            rsp_count <= 2'd2;
+                        end
+
+                        2'b10: begin
+                            rsp_count <= 2'd0;
+                        end
+
+                        2'b11: begin
+                            // Head is consumed while the inflight response
+                            // replaces it in the same cycle.
+                            rsp_addr0 <= inflight_addr;
+                            rsp_data0 <= dout1;
+                            rsp_count <= 2'd1;
+                        end
+                    endcase
+                end
+
+                2'd2: begin
+                    if (rsp_fire) begin
+                        rsp_addr0 <= rsp_addr1;
+                        rsp_data0 <= rsp_data1;
+
+                        if (arrival) begin
+                            rsp_addr1 <= inflight_addr;
+                            rsp_data1 <= dout1;
+                            rsp_count <= 2'd2;
+                        end
+                        else begin
+                            rsp_count <= 2'd1;
+                        end
+                    end
+                end
+
+                default: rsp_count <= 2'd0;
+            endcase
         end
     end
-
-    assign cpu_rvalid = cpu_re_d;
-    assign cpu_raddr  = cpu_addr_d;
-    assign cpu_rdata  = dout1;
 
     sky130_sram_1kbyte_1rw1r_32x256_8 SRAM_IMEM (
         // Port0: loader write
@@ -81,10 +179,10 @@ module sram_wrapper32b (
         .din0   (prog_wdata),
         .dout0  (unused_dout0),
 
-        // Port1: CPU instruction read
+        // Port1: CPU instruction read. Only accepted requests hit the macro.
         .clk1   (clk),
-        .csb1   (~cpu_re),
-        .addr1  (cpu_addr[9:2]),
+        .csb1   (~req_fire),
+        .addr1  (req_addr[9:2]),
         .dout1  (dout1)
     );
 
