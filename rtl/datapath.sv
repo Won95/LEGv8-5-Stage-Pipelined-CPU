@@ -10,6 +10,8 @@ module datapath(
 
     // Instruction memory interface
     output wire [63:0] imem_addr,
+    input  wire        imem_rvalid,
+    input  wire [63:0] imem_raddr,
     input  wire [31:0] imem_rdata,
 
     // Data memory request/ack interface
@@ -34,11 +36,12 @@ module datapath(
 
     wire [63:0] pc_if, pc_next, pc_4_if;
     wire [31:0] instruction_if;
+    reg fetch_kill;
 
     assign pc_4_if = pc_if + 64'd4;
     assign pc_next = PCSrc_id ? pc_s2_id : pc_4_if;
 
-    // hazard stall과 memory wait은 성격이 다르지만 둘 다 PC는 hold해야 한다.
+    // hazard stall과 data-memory wait 동안 PC request address를 유지한다.
     wire pc_hold_all;
     assign pc_hold_all = pchold_id | mem_wait;
 
@@ -50,6 +53,8 @@ module datapath(
         .pc(pc_if)
     );
 
+    // IMEM은 synchronous/pipelined read이다.
+    // imem_raddr가 imem_rdata와 대응되는 request PC이다.
     assign imem_addr      = pc_if;
     assign instruction_if = imem_rdata;
 
@@ -211,6 +216,8 @@ module datapath(
 
     always @(posedge clk) begin
         if (rst) begin
+            fetch_kill <= 1'b0;
+
             // IF/ID
             instruction_id <= 32'd0;
             pc_id <= 64'd0;
@@ -248,6 +255,13 @@ module datapath(
         end
 
         else begin
+            // Taken branch edge에서 SRAM에 이미 들어간 sequential fetch 한 개는
+            // 다음 cycle에 도착하므로 한 번 버린다.
+            if (PCSrc_id)
+                fetch_kill <= 1'b1;
+            else if (!mem_wait && !idhold_id)
+                fetch_kill <= 1'b0;
+
             /*==============
                  Memory wait
                  ==============*/
@@ -331,7 +345,7 @@ module datapath(
                  Branch
                  ==============*/
             else if (PCSrc_id) begin
-                // IF/ID flush
+                // 현재 들어온 sequential response flush
                 instruction_id <= 32'd0;
                 pc_id <= 64'd0;
 
@@ -371,9 +385,16 @@ module datapath(
                  Normal
                  ==============*/
             else begin
-                // IF/ID
-                instruction_id <= instruction_if;
-                pc_id <= pc_if;
+                // IF/ID: synchronous SRAM response와 request PC를 함께 capture.
+                // reset 직후 첫 cycle 또는 branch 뒤 stale response는 bubble 처리한다.
+                if (imem_rvalid && !fetch_kill) begin
+                    instruction_id <= instruction_if;
+                    pc_id <= imem_raddr;
+                end
+                else begin
+                    instruction_id <= 32'd0;
+                    pc_id <= 64'd0;
+                end
 
                 // ID/EX
                 Readdata1_ex <= Readdata1_id;
