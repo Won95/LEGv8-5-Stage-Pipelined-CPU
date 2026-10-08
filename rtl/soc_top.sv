@@ -14,6 +14,15 @@ module soc_top (
     input  wire [63:0] gpio_in,
     output wire [63:0] gpio_out,
 
+    // UART byte-stream pins. Bit-level UART PHY is intentionally outside this SoC.
+    input  wire        uart_rx_valid,
+    input  wire [7:0]  uart_rx_data,
+    output wire        uart_rx_ready,
+
+    output wire        uart_tx_valid,
+    output wire [7:0]  uart_tx_data,
+    input  wire        uart_tx_ready,
+
     output wire        load_done
 );
 
@@ -261,21 +270,34 @@ module soc_top (
     );
 
     /*==============================
-      Minimal GPIO MMIO slave
+      MMIO subsystem
+
       0x0100 : GPIO_OUT
       0x0108 : GPIO_IN
+      0x0120 : UART_RXDATA
+      0x0128 : UART_TXDATA
+      0x0130 : UART_STATUS
       ==============================*/
-    mmio_gpio gpio (
-        .clk      (clk),
-        .rst      (rst),
-        .valid    (mmio_valid),
-        .write    (mmio_write),
-        .addr     (mmio_addr),
-        .wdata    (mmio_wdata),
-        .ready    (mmio_ready),
-        .rdata    (mmio_rdata),
-        .gpio_in  (gpio_in),
-        .gpio_out (gpio_out)
+    mmio_subsystem mmio (
+        .clk           (clk),
+        .rst           (rst),
+        .valid         (mmio_valid),
+        .write         (mmio_write),
+        .addr          (mmio_addr),
+        .wdata         (mmio_wdata),
+        .ready         (mmio_ready),
+        .rdata         (mmio_rdata),
+
+        .gpio_in       (gpio_in),
+        .gpio_out      (gpio_out),
+
+        .uart_rx_valid (uart_rx_valid),
+        .uart_rx_data  (uart_rx_data),
+        .uart_rx_ready (uart_rx_ready),
+
+        .uart_tx_valid (uart_tx_valid),
+        .uart_tx_data  (uart_tx_data),
+        .uart_tx_ready (uart_tx_ready)
     );
 
 endmodule
