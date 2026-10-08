@@ -5,12 +5,13 @@ module soc_top_tb;
     reg clk;
     reg rst;
 
-    reg         boot_mode;
-    reg         boot_valid;
-    reg         boot_target;
-    reg  [63:0] boot_addr;
-    reg  [63:0] boot_wdata;
-    wire        boot_ready;
+    wire        ext_valid;
+    wire        ext_target;
+    wire        ext_last;
+    wire [63:0] ext_addr;
+    wire [63:0] ext_wdata;
+    wire        ext_ready;
+    wire        load_done;
 
     integer pass_count;
     integer fail_count;
@@ -44,15 +45,28 @@ module soc_top_tb;
     reg saw_cbz_pc60_taken;
     reg saw_b_pc72_taken;
 
-    soc_top dut(
-        .clk(clk),
-        .rst(rst),
-        .boot_mode(boot_mode),
-        .boot_valid(boot_valid),
-        .boot_target(boot_target),
-        .boot_addr(boot_addr),
-        .boot_wdata(boot_wdata),
-        .boot_ready(boot_ready)
+    // SoC 밖의 external memory가 stream을 발생시킨다.
+    external_memory_model EXT_MEM (
+        .clk           (clk),
+        .rst           (rst),
+        .stream_valid  (ext_valid),
+        .stream_target (ext_target),
+        .stream_last   (ext_last),
+        .stream_addr   (ext_addr),
+        .stream_wdata  (ext_wdata),
+        .stream_ready  (ext_ready)
+    );
+
+    soc_top dut (
+        .clk        (clk),
+        .rst        (rst),
+        .ext_valid  (ext_valid),
+        .ext_target (ext_target),
+        .ext_last   (ext_last),
+        .ext_addr   (ext_addr),
+        .ext_wdata  (ext_wdata),
+        .ext_ready  (ext_ready),
+        .load_done  (load_done)
     );
 
     task check_reg;
@@ -106,25 +120,6 @@ module soc_top_tb;
         end
     endtask
 
-    // External loader model: future FIFO/IO logic will drive the same transaction.
-    task boot_write_dmem;
-        input [63:0] addr;
-        input [63:0] data;
-        begin
-            @(negedge clk);
-            boot_target = 1'b1; // DMEM
-            boot_addr   = addr;
-            boot_wdata  = data;
-            boot_valid  = 1'b1;
-
-            while (boot_ready !== 1'b1)
-                @(negedge clk);
-
-            boot_valid = 1'b0;
-            @(negedge clk);
-        end
-    endtask
-
     initial clk = 1'b0;
     always #5 clk = ~clk;
 
@@ -161,22 +156,14 @@ module soc_top_tb;
         saw_cbz_pc60_taken = 1'b0;
         saw_b_pc72_taken = 1'b0;
 
-        boot_mode   = 1'b1;
-        boot_valid  = 1'b0;
-        boot_target = 1'b1;
-        boot_addr   = 64'd0;
-        boot_wdata  = 64'd0;
-
         rst = 1'b1;
         #12;
         rst = 1'b0;
 
-        // No SRAM backdoor preload: write through the external boot interface.
-        boot_write_dmem(64'd12, 64'd99);
-        $display("BOOT DMEM WRITE COMPLETE: addr=12 data=99");
-
-        // Loader releases ownership; CPU starts from reset state on next posedge.
-        boot_mode = 1'b0;
+        // TB는 데이터를 직접 넣지 않는다.
+        // External Memory -> FIFO -> Loader -> Bus -> DMEM 완료를 기다린다.
+        wait (load_done === 1'b1);
+        $display("EXTERNAL MEMORY LOAD COMPLETE");
 
         #500;
 
@@ -232,7 +219,7 @@ module soc_top_tb;
         check_count("forward A from MEM", fwd_a_mem_count, 5);
         check_count("forward A from WB",  fwd_a_wb_count,  1);
         check_count("forward B from MEM", fwd_b_mem_count, 3);
-        check_count("forward B from WB",  fwd_b_wb_count,  5);
+        check_count("forward B from WB",  fwd_b_mem_count, 5);
 
         check_event("stall at ID PC=20",   saw_stall_pc20);
         check_event("stall at ID PC=32",   saw_stall_pc32);
