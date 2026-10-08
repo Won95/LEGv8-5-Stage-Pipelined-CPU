@@ -20,10 +20,16 @@ module soc_top (
     /*==============================
       Instruction memory interface
       ==============================*/
-    wire [63:0] imem_addr;
-    wire        imem_rvalid;
-    wire [63:0] imem_raddr;
-    wire [31:0] imem_rdata;
+    wire [63:0] imem_req_addr;
+    wire        imem_req_valid;
+    wire        imem_req_ready;
+
+    wire        imem_rsp_valid;
+    wire        imem_rsp_ready;
+    wire [63:0] imem_rsp_addr;
+    wire [31:0] imem_rsp_data;
+
+    wire        imem_flush;
 
     /*==============================
       CPU data-memory master
@@ -144,20 +150,24 @@ module soc_top (
       CPU core
       ==============================*/
     core core (
-        .clk         (clk),
-        .rst         (core_rst),
+        .clk            (clk),
+        .rst            (core_rst),
 
-        .imem_addr   (imem_addr),
-        .imem_rvalid (imem_rvalid),
-        .imem_raddr  (imem_raddr),
-        .imem_rdata  (imem_rdata),
+        .imem_req_addr  (imem_req_addr),
+        .imem_req_valid (imem_req_valid),
+        .imem_req_ready (imem_req_ready),
+        .imem_rsp_valid (imem_rsp_valid),
+        .imem_rsp_ready (imem_rsp_ready),
+        .imem_rsp_addr  (imem_rsp_addr),
+        .imem_rsp_data  (imem_rsp_data),
+        .imem_flush     (imem_flush),
 
-        .dmem_addr   (cpu_dmem_addr),
-        .dmem_wdata  (cpu_dmem_wdata),
-        .dmem_we     (cpu_dmem_we),
-        .dmem_re     (cpu_dmem_re),
-        .dmem_ready  (cpu_dmem_ready),
-        .dmem_rdata  (cpu_dmem_rdata)
+        .dmem_addr      (cpu_dmem_addr),
+        .dmem_wdata     (cpu_dmem_wdata),
+        .dmem_we        (cpu_dmem_we),
+        .dmem_re        (cpu_dmem_re),
+        .dmem_ready     (cpu_dmem_ready),
+        .dmem_rdata     (cpu_dmem_rdata)
     );
 
     /*==============================
@@ -174,11 +184,16 @@ module soc_top (
         .prog_wdata (loader_imem_wdata),
         .prog_ready (loader_imem_ready),
 
-        .cpu_re     (!core_rst),
-        .cpu_addr   (imem_addr),
-        .cpu_rvalid (imem_rvalid),
-        .cpu_raddr  (imem_raddr),
-        .cpu_rdata  (imem_rdata)
+        .req_valid  (imem_req_valid),
+        .req_ready  (imem_req_ready),
+        .req_addr   (imem_req_addr),
+
+        .rsp_valid  (imem_rsp_valid),
+        .rsp_ready  (imem_rsp_ready),
+        .rsp_addr   (imem_rsp_addr),
+        .rsp_data   (imem_rsp_data),
+
+        .flush      (imem_flush)
     );
 
     /*==============================
