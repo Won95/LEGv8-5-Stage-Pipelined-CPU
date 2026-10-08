@@ -45,7 +45,7 @@ module soc_top (
     wire        imem_flush;
 
     /*==============================
-      CPU data-memory master
+      CPU data-memory request interface
       ==============================*/
     wire [63:0] cpu_dmem_addr;
     wire [63:0] cpu_dmem_wdata;
@@ -89,7 +89,7 @@ module soc_top (
     /*==============================
       FIFO -> Loader
       target=0 : IMEM programming port
-      target=1 : shared data bus
+      target=1 : AHB-Lite data path
       ==============================*/
     wire        loader_bus_valid;
     wire        loader_bus_write;
@@ -124,39 +124,52 @@ module soc_top (
     );
 
     /*==============================
-      Single shared DATA bus
-      loading 중: Loader master
-      loading 후: CPU master
+      AHB-Lite system bus
+
+      loading 중 : Loader owns master
+      loading 후 : CPU LOAD/STORE owns master
       ==============================*/
-    wire        bus_valid;
-    wire        bus_write;
-    wire [63:0] bus_addr;
-    wire [63:0] bus_wdata;
-    wire        bus_ready;
-    wire [63:0] bus_rdata;
+    wire [63:0] HADDR;
+    wire [1:0]  HTRANS;
+    wire        HWRITE;
+    wire [2:0]  HSIZE;
+    wire [2:0]  HBURST;
+    wire [3:0]  HPROT;
+    wire        HMASTLOCK;
+    wire [63:0] HWDATA;
+    wire [63:0] HRDATA;
+    wire        HREADY;
+    wire        HRESP;
 
-    simple_bus data_bus (
-        .loader_select (!load_done),
+    ahb_lite_master ahb_master (
+        .clk            (clk),
+        .rst            (rst),
+        .loader_select  (!load_done),
 
-        .loader_valid  (loader_bus_valid),
-        .loader_write  (loader_bus_write),
-        .loader_addr   (loader_bus_addr),
-        .loader_wdata  (loader_bus_wdata),
-        .loader_ready  (loader_bus_ready),
+        .loader_valid   (loader_bus_valid),
+        .loader_write   (loader_bus_write),
+        .loader_addr    (loader_bus_addr),
+        .loader_wdata   (loader_bus_wdata),
+        .loader_ready   (loader_bus_ready),
 
-        .cpu_valid     (cpu_bus_valid),
-        .cpu_write     (cpu_bus_write),
-        .cpu_addr      (cpu_dmem_addr),
-        .cpu_wdata     (cpu_dmem_wdata),
-        .cpu_ready     (cpu_dmem_ready),
-        .cpu_rdata     (cpu_dmem_rdata),
+        .cpu_valid      (cpu_bus_valid),
+        .cpu_write      (cpu_bus_write),
+        .cpu_addr       (cpu_dmem_addr),
+        .cpu_wdata      (cpu_dmem_wdata),
+        .cpu_ready      (cpu_dmem_ready),
+        .cpu_rdata      (cpu_dmem_rdata),
 
-        .slave_valid   (bus_valid),
-        .slave_write   (bus_write),
-        .slave_addr    (bus_addr),
-        .slave_wdata   (bus_wdata),
-        .slave_ready   (bus_ready),
-        .slave_rdata   (bus_rdata)
+        .HADDR           (HADDR),
+        .HTRANS          (HTRANS),
+        .HWRITE          (HWRITE),
+        .HSIZE           (HSIZE),
+        .HBURST          (HBURST),
+        .HPROT           (HPROT),
+        .HMASTLOCK       (HMASTLOCK),
+        .HWDATA          (HWDATA),
+        .HRDATA          (HRDATA),
+        .HREADY          (HREADY),
+        .HRESP           (HRESP)
     );
 
     /*==============================
@@ -210,9 +223,9 @@ module soc_top (
     );
 
     /*==============================
-      DATA bus address decoder
+      AHB-Lite fabric backends
 
-      boot : loader target=DMEM always routes to DMEM
+      boot : loader data transactions -> DMEM
       run  : 0x0000~0x00FF -> DMEM
              0x0100~0x01FF -> MMIO
       ==============================*/
@@ -230,33 +243,40 @@ module soc_top (
     wire        mmio_ready;
     wire [63:0] mmio_rdata;
 
-    data_bus_decoder decoder (
-        .boot_mode  (!load_done),
+    ahb_lite_fabric ahb_fabric (
+        .clk           (clk),
+        .rst           (rst),
+        .boot_mode     (!load_done),
 
-        .bus_valid  (bus_valid),
-        .bus_write  (bus_write),
-        .bus_addr   (bus_addr),
-        .bus_wdata  (bus_wdata),
-        .bus_ready  (bus_ready),
-        .bus_rdata  (bus_rdata),
+        .HADDR          (HADDR),
+        .HTRANS         (HTRANS),
+        .HWRITE         (HWRITE),
+        .HSIZE          (HSIZE),
+        .HBURST         (HBURST),
+        .HPROT          (HPROT),
+        .HMASTLOCK      (HMASTLOCK),
+        .HWDATA         (HWDATA),
+        .HRDATA         (HRDATA),
+        .HREADY         (HREADY),
+        .HRESP          (HRESP),
 
-        .dmem_valid (dmem_slave_valid),
-        .dmem_write (dmem_slave_write),
-        .dmem_addr  (dmem_slave_addr),
-        .dmem_wdata (dmem_slave_wdata),
-        .dmem_ready (dmem_slave_ready),
-        .dmem_rdata (dmem_slave_rdata),
+        .dmem_valid     (dmem_slave_valid),
+        .dmem_write     (dmem_slave_write),
+        .dmem_addr      (dmem_slave_addr),
+        .dmem_wdata     (dmem_slave_wdata),
+        .dmem_ready     (dmem_slave_ready),
+        .dmem_rdata     (dmem_slave_rdata),
 
-        .mmio_valid (mmio_valid),
-        .mmio_write (mmio_write),
-        .mmio_addr  (mmio_addr),
-        .mmio_wdata (mmio_wdata),
-        .mmio_ready (mmio_ready),
-        .mmio_rdata (mmio_rdata)
+        .mmio_valid     (mmio_valid),
+        .mmio_write     (mmio_write),
+        .mmio_addr      (mmio_addr),
+        .mmio_wdata     (mmio_wdata),
+        .mmio_ready     (mmio_ready),
+        .mmio_rdata     (mmio_rdata)
     );
 
     /*==============================
-      DMEM slave
+      DMEM backend
       ==============================*/
     sram_wrapper64b data_sram (
         .clk   (clk),
