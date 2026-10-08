@@ -13,7 +13,7 @@ module soc_top (
     output wire        load_done
 );
 
-    // CPU는 external image loading이 끝난 뒤 실행을 시작한다.
+    // External image(IMEM + DMEM) loading이 모두 끝난 뒤 CPU 실행 시작.
     wire core_rst;
     assign core_rst = rst | !load_done;
 
@@ -21,6 +21,8 @@ module soc_top (
       Instruction memory interface
       ==============================*/
     wire [63:0] imem_addr;
+    wire        imem_rvalid;
+    wire [63:0] imem_raddr;
     wire [31:0] imem_rdata;
 
     /*==============================
@@ -42,7 +44,7 @@ module soc_top (
     /*==============================
       External stream -> FIFO
       packet = {last, target, addr, data}
-      target: 0=IMEM(reserved), 1=DMEM
+      target: 0=IMEM, 1=DMEM
       ==============================*/
     wire [129:0] fifo_wr_data;
     wire         fifo_rd_valid;
@@ -66,7 +68,9 @@ module soc_top (
     );
 
     /*==============================
-      FIFO -> Loader master
+      FIFO -> Loader
+      target=0 : IMEM programming port
+      target=1 : shared data bus
       ==============================*/
     wire        loader_bus_valid;
     wire        loader_bus_write;
@@ -74,22 +78,34 @@ module soc_top (
     wire [63:0] loader_bus_wdata;
     wire        loader_bus_ready;
 
+    wire        loader_imem_valid;
+    wire [63:0] loader_imem_addr;
+    wire [31:0] loader_imem_wdata;
+    wire        loader_imem_ready;
+
     memory_loader loader (
         .clk        (clk),
         .rst        (rst),
         .fifo_valid (fifo_rd_valid),
         .fifo_data  (fifo_rd_data),
         .fifo_ready (fifo_rd_ready),
+
         .bus_valid  (loader_bus_valid),
         .bus_write  (loader_bus_write),
         .bus_addr   (loader_bus_addr),
         .bus_wdata  (loader_bus_wdata),
         .bus_ready  (loader_bus_ready),
+
+        .imem_valid (loader_imem_valid),
+        .imem_addr  (loader_imem_addr),
+        .imem_wdata (loader_imem_wdata),
+        .imem_ready (loader_imem_ready),
+
         .load_done  (load_done)
     );
 
     /*==============================
-      Single shared data bus
+      Single shared DATA bus
       loading 중: Loader master
       loading 후: CPU master
       ==============================*/
@@ -130,8 +146,12 @@ module soc_top (
     core core (
         .clk         (clk),
         .rst         (core_rst),
+
         .imem_addr   (imem_addr),
+        .imem_rvalid (imem_rvalid),
+        .imem_raddr  (imem_raddr),
         .imem_rdata  (imem_rdata),
+
         .dmem_addr   (cpu_dmem_addr),
         .dmem_wdata  (cpu_dmem_wdata),
         .dmem_we     (cpu_dmem_we),
@@ -140,10 +160,25 @@ module soc_top (
         .dmem_rdata  (cpu_dmem_rdata)
     );
 
-    // IMEM은 다음 단계에서 32-bit SRAM + loader write path로 교체한다.
-    InstructionMem IM (
-        .pc          (imem_addr),
-        .instruction (imem_rdata)
+    /*==============================
+      IMEM SRAM
+      Port0 : Loader write
+      Port1 : CPU pipelined read
+      ==============================*/
+    sram_wrapper32b instruction_sram (
+        .clk        (clk),
+        .rst        (rst),
+
+        .prog_valid (loader_imem_valid),
+        .prog_addr  (loader_imem_addr),
+        .prog_wdata (loader_imem_wdata),
+        .prog_ready (loader_imem_ready),
+
+        .cpu_re     (!core_rst),
+        .cpu_addr   (imem_addr),
+        .cpu_rvalid (imem_rvalid),
+        .cpu_raddr  (imem_raddr),
+        .cpu_rdata  (imem_rdata)
     );
 
     /*==============================
