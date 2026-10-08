@@ -219,7 +219,7 @@ module soc_top_tb;
         check_count("forward A from MEM", fwd_a_mem_count, 5);
         check_count("forward A from WB",  fwd_a_wb_count,  1);
         check_count("forward B from MEM", fwd_b_mem_count, 3);
-        check_count("forward B from WB",  fwd_b_mem_count, 5);
+        check_count("forward B from WB",  fwd_b_wb_count,  5);
 
         check_event("stall at ID PC=20",   saw_stall_pc20);
         check_event("stall at ID PC=32",   saw_stall_pc32);
