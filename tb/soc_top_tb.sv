@@ -5,6 +5,13 @@ module soc_top_tb;
     reg clk;
     reg rst;
 
+    reg         boot_mode;
+    reg         boot_valid;
+    reg         boot_target;
+    reg  [63:0] boot_addr;
+    reg  [63:0] boot_wdata;
+    wire        boot_ready;
+
     integer pass_count;
     integer fail_count;
     integer assertion_fail_count;
@@ -39,7 +46,13 @@ module soc_top_tb;
 
     soc_top dut(
         .clk(clk),
-        .rst(rst)
+        .rst(rst),
+        .boot_mode(boot_mode),
+        .boot_valid(boot_valid),
+        .boot_target(boot_target),
+        .boot_addr(boot_addr),
+        .boot_wdata(boot_wdata),
+        .boot_ready(boot_ready)
     );
 
     task check_reg;
@@ -93,6 +106,25 @@ module soc_top_tb;
         end
     endtask
 
+    // External loader model: future FIFO/IO logic will drive the same transaction.
+    task boot_write_dmem;
+        input [63:0] addr;
+        input [63:0] data;
+        begin
+            @(negedge clk);
+            boot_target = 1'b1; // DMEM
+            boot_addr   = addr;
+            boot_wdata  = data;
+            boot_valid  = 1'b1;
+
+            while (boot_ready !== 1'b1)
+                @(negedge clk);
+
+            boot_valid = 1'b0;
+            @(negedge clk);
+        end
+    endtask
+
     initial clk = 1'b0;
     always #5 clk = ~clk;
 
@@ -129,19 +161,22 @@ module soc_top_tb;
         saw_cbz_pc60_taken = 1'b0;
         saw_b_pc72_taken = 1'b0;
 
-        // simulation preload: original behavioral dataMem[12] = 64'd99
+        boot_mode   = 1'b1;
+        boot_valid  = 1'b0;
+        boot_target = 1'b1;
+        boot_addr   = 64'd0;
+        boot_wdata  = 64'd0;
+
         rst = 1'b1;
-
-        #1;
-        dut.data_sram.SRAM_LOW.mem[12]  = 32'd99;
-        dut.data_sram.SRAM_HIGH.mem[12] = 32'd0;
-
-        $display("SRAM PRELOAD CHECK: HIGH=%0d LOW=%0d",
-                dut.data_sram.SRAM_HIGH.mem[12],
-                dut.data_sram.SRAM_LOW.mem[12]);
-
-        #11;
+        #12;
         rst = 1'b0;
+
+        // No SRAM backdoor preload: write through the external boot interface.
+        boot_write_dmem(64'd12, 64'd99);
+        $display("BOOT DMEM WRITE COMPLETE: addr=12 data=99");
+
+        // Loader releases ownership; CPU starts from reset state on next posedge.
+        boot_mode = 1'b0;
 
         #500;
 
@@ -235,7 +270,7 @@ module soc_top_tb;
     end
 
     always @(posedge clk) begin
-        if (!rst) begin
+        if (!dut.core_rst) begin
             assert (({dut.core.pchold_id, dut.core.idhold_id, dut.core.hazardmux_id} == 3'b000) ||
                     ({dut.core.pchold_id, dut.core.idhold_id, dut.core.hazardmux_id} == 3'b111))
             else begin
@@ -278,24 +313,22 @@ module soc_top_tb;
                 endcase
             end
 
-            // memory wait 동안에는 같은 EX stage가 hold되므로 같은 forwarding을 중복 카운트하지 않는다.
-            if (!dut.core.datapath.mem_wait) begin
-                if (dut.core.fwdmuxa_ex == 2'b10) begin
-                    saw_fwd_a_mem <= 1'b1;
-                    fwd_a_mem_count <= fwd_a_mem_count + 1;
-                end
-                if (dut.core.fwdmuxa_ex == 2'b01) begin
-                    saw_fwd_a_wb <= 1'b1;
-                    fwd_a_wb_count <= fwd_a_wb_count + 1;
-                end
-                if (dut.core.fwdmuxb_ex == 2'b10) begin
-                    saw_fwd_b_mem <= 1'b1;
-                    fwd_b_mem_count <= fwd_b_mem_count + 1;
-                end
-                if (dut.core.fwdmuxb_ex == 2'b01) begin
-                    saw_fwd_b_wb <= 1'b1;
-                    fwd_b_wb_count <= fwd_b_wb_count + 1;
-                end
+            // mem_wait 동안 EX state가 hold되므로 동일 forwarding 상태를 중복 count하지 않는다.
+            if (!dut.core.datapath.mem_wait && dut.core.fwdmuxa_ex == 2'b10) begin
+                saw_fwd_a_mem <= 1'b1;
+                fwd_a_mem_count <= fwd_a_mem_count + 1;
+            end
+            if (!dut.core.datapath.mem_wait && dut.core.fwdmuxa_ex == 2'b01) begin
+                saw_fwd_a_wb <= 1'b1;
+                fwd_a_wb_count <= fwd_a_wb_count + 1;
+            end
+            if (!dut.core.datapath.mem_wait && dut.core.fwdmuxb_ex == 2'b10) begin
+                saw_fwd_b_mem <= 1'b1;
+                fwd_b_mem_count <= fwd_b_mem_count + 1;
+            end
+            if (!dut.core.datapath.mem_wait && dut.core.fwdmuxb_ex == 2'b01) begin
+                saw_fwd_b_wb <= 1'b1;
+                fwd_b_wb_count <= fwd_b_wb_count + 1;
             end
 
             if (dut.core.Branch_id && !dut.core.idhold_id) begin
