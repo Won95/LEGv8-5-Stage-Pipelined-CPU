@@ -10,6 +10,10 @@ module soc_top (
     input  wire [63:0] ext_wdata,
     output wire        ext_ready,
 
+    // Minimal GPIO MMIO pins
+    input  wire [63:0] gpio_in,
+    output wire [63:0] gpio_out,
+
     output wire        load_done
 );
 
@@ -197,17 +201,81 @@ module soc_top (
     );
 
     /*==============================
+      DATA bus address decoder
+
+      boot : loader target=DMEM always routes to DMEM
+      run  : 0x0000~0x00FF -> DMEM
+             0x0100~0x01FF -> MMIO
+      ==============================*/
+    wire        dmem_slave_valid;
+    wire        dmem_slave_write;
+    wire [63:0] dmem_slave_addr;
+    wire [63:0] dmem_slave_wdata;
+    wire        dmem_slave_ready;
+    wire [63:0] dmem_slave_rdata;
+
+    wire        mmio_valid;
+    wire        mmio_write;
+    wire [63:0] mmio_addr;
+    wire [63:0] mmio_wdata;
+    wire        mmio_ready;
+    wire [63:0] mmio_rdata;
+
+    data_bus_decoder decoder (
+        .boot_mode  (!load_done),
+
+        .bus_valid  (bus_valid),
+        .bus_write  (bus_write),
+        .bus_addr   (bus_addr),
+        .bus_wdata  (bus_wdata),
+        .bus_ready  (bus_ready),
+        .bus_rdata  (bus_rdata),
+
+        .dmem_valid (dmem_slave_valid),
+        .dmem_write (dmem_slave_write),
+        .dmem_addr  (dmem_slave_addr),
+        .dmem_wdata (dmem_slave_wdata),
+        .dmem_ready (dmem_slave_ready),
+        .dmem_rdata (dmem_slave_rdata),
+
+        .mmio_valid (mmio_valid),
+        .mmio_write (mmio_write),
+        .mmio_addr  (mmio_addr),
+        .mmio_wdata (mmio_wdata),
+        .mmio_ready (mmio_ready),
+        .mmio_rdata (mmio_rdata)
+    );
+
+    /*==============================
       DMEM slave
       ==============================*/
     sram_wrapper64b data_sram (
         .clk   (clk),
         .rst   (rst),
-        .addr  (bus_addr),
-        .wdata (bus_wdata),
-        .we    (bus_valid &&  bus_write),
-        .re    (bus_valid && !bus_write),
-        .ready (bus_ready),
-        .rdata (bus_rdata)
+        .addr  (dmem_slave_addr),
+        .wdata (dmem_slave_wdata),
+        .we    (dmem_slave_valid &&  dmem_slave_write),
+        .re    (dmem_slave_valid && !dmem_slave_write),
+        .ready (dmem_slave_ready),
+        .rdata (dmem_slave_rdata)
+    );
+
+    /*==============================
+      Minimal GPIO MMIO slave
+      0x0100 : GPIO_OUT
+      0x0108 : GPIO_IN
+      ==============================*/
+    mmio_gpio gpio (
+        .clk      (clk),
+        .rst      (rst),
+        .valid    (mmio_valid),
+        .write    (mmio_write),
+        .addr     (mmio_addr),
+        .wdata    (mmio_wdata),
+        .ready    (mmio_ready),
+        .rdata    (mmio_rdata),
+        .gpio_in  (gpio_in),
+        .gpio_out (gpio_out)
     );
 
 endmodule
