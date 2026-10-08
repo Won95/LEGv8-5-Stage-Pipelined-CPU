@@ -1,24 +1,31 @@
 module soc_top (
-    input wire clk,
-    input wire rst,
+    input  wire        clk,
+    input  wire        rst,
 
-    // External boot-loader interface.
-    // target: 1'b0 = IMEM (reserved for next step), 1'b1 = DMEM.
-    input  wire        boot_mode,
-    input  wire        boot_valid,
-    input  wire        boot_target,
-    input  wire [63:0] boot_addr,
-    input  wire [63:0] boot_wdata,
-    output wire        boot_ready
+    // External memory stream interface
+    input  wire        ext_valid,
+    input  wire        ext_target,
+    input  wire        ext_last,
+    input  wire [63:0] ext_addr,
+    input  wire [63:0] ext_wdata,
+    output wire        ext_ready,
+
+    output wire        load_done
 );
 
+    // CPU는 external image loading이 끝난 뒤 실행을 시작한다.
     wire core_rst;
-    assign core_rst = rst | boot_mode;
+    assign core_rst = rst | !load_done;
 
+    /*==============================
+      Instruction memory interface
+      ==============================*/
     wire [63:0] imem_addr;
     wire [31:0] imem_rdata;
 
-    // CPU-side data-memory interface
+    /*==============================
+      CPU data-memory master
+      ==============================*/
     wire [63:0] cpu_dmem_addr;
     wire [63:0] cpu_dmem_wdata;
     wire [63:0] cpu_dmem_rdata;
@@ -26,58 +33,131 @@ module soc_top (
     wire        cpu_dmem_re;
     wire        cpu_dmem_ready;
 
-    // SRAM-side data-memory interface
-    wire [63:0] dmem_addr;
-    wire [63:0] dmem_wdata;
-    wire [63:0] dmem_rdata;
-    wire        dmem_we;
-    wire        dmem_re;
-    wire        dmem_ready;
+    wire cpu_bus_valid;
+    wire cpu_bus_write;
 
-    wire boot_dmem_access;
-    assign boot_dmem_access = boot_mode && boot_valid && boot_target;
+    assign cpu_bus_valid = cpu_dmem_re | cpu_dmem_we;
+    assign cpu_bus_write = cpu_dmem_we;
 
-    // During boot the CPU is held in reset and the loader owns the DMEM port.
-    // After boot_mode is released, ownership returns to the CPU.
-    assign dmem_addr  = boot_dmem_access ? boot_addr  : cpu_dmem_addr;
-    assign dmem_wdata = boot_dmem_access ? boot_wdata : cpu_dmem_wdata;
-    assign dmem_we    = boot_dmem_access ? 1'b1       : cpu_dmem_we;
-    assign dmem_re    = boot_dmem_access ? 1'b0       : cpu_dmem_re;
+    /*==============================
+      External stream -> FIFO
+      packet = {last, target, addr, data}
+      target: 0=IMEM(reserved), 1=DMEM
+      ==============================*/
+    wire [129:0] fifo_wr_data;
+    wire         fifo_rd_valid;
+    wire [129:0] fifo_rd_data;
+    wire         fifo_rd_ready;
 
-    assign cpu_dmem_rdata = dmem_rdata;
-    assign cpu_dmem_ready = boot_mode ? 1'b0 : dmem_ready;
+    assign fifo_wr_data = {ext_last, ext_target, ext_addr, ext_wdata};
 
-    // IMEM target is reserved until instruction SRAM is connected.
-    assign boot_ready = (boot_mode && boot_target) ? dmem_ready : 1'b0;
-
-    core core(
-        .clk(clk),
-        .rst(core_rst),
-        .imem_addr(imem_addr),
-        .imem_rdata(imem_rdata),
-        .dmem_addr(cpu_dmem_addr),
-        .dmem_wdata(cpu_dmem_wdata),
-        .dmem_we(cpu_dmem_we),
-        .dmem_re(cpu_dmem_re),
-        .dmem_ready(cpu_dmem_ready),
-        .dmem_rdata(cpu_dmem_rdata)
+    simple_fifo #(
+        .WIDTH(130),
+        .DEPTH(4)
+    ) load_fifo (
+        .clk      (clk),
+        .rst      (rst),
+        .wr_valid (ext_valid),
+        .wr_data  (fifo_wr_data),
+        .wr_ready (ext_ready),
+        .rd_valid (fifo_rd_valid),
+        .rd_data  (fifo_rd_data),
+        .rd_ready (fifo_rd_ready)
     );
 
-    // Instruction memory remains behavioral until the next step.
-    InstructionMem IM(
-        .pc(imem_addr),
-        .instruction(imem_rdata)
+    /*==============================
+      FIFO -> Loader master
+      ==============================*/
+    wire        loader_bus_valid;
+    wire        loader_bus_write;
+    wire [63:0] loader_bus_addr;
+    wire [63:0] loader_bus_wdata;
+    wire        loader_bus_ready;
+
+    memory_loader loader (
+        .clk        (clk),
+        .rst        (rst),
+        .fifo_valid (fifo_rd_valid),
+        .fifo_data  (fifo_rd_data),
+        .fifo_ready (fifo_rd_ready),
+        .bus_valid  (loader_bus_valid),
+        .bus_write  (loader_bus_write),
+        .bus_addr   (loader_bus_addr),
+        .bus_wdata  (loader_bus_wdata),
+        .bus_ready  (loader_bus_ready),
+        .load_done  (load_done)
     );
 
-    sram_wrapper64b data_sram(
-        .clk(clk),
-        .rst(rst),
-        .addr(dmem_addr),
-        .wdata(dmem_wdata),
-        .we(dmem_we),
-        .re(dmem_re),
-        .ready(dmem_ready),
-        .rdata(dmem_rdata)
+    /*==============================
+      Single shared data bus
+      loading 중: Loader master
+      loading 후: CPU master
+      ==============================*/
+    wire        bus_valid;
+    wire        bus_write;
+    wire [63:0] bus_addr;
+    wire [63:0] bus_wdata;
+    wire        bus_ready;
+    wire [63:0] bus_rdata;
+
+    simple_bus data_bus (
+        .loader_select (!load_done),
+
+        .loader_valid  (loader_bus_valid),
+        .loader_write  (loader_bus_write),
+        .loader_addr   (loader_bus_addr),
+        .loader_wdata  (loader_bus_wdata),
+        .loader_ready  (loader_bus_ready),
+
+        .cpu_valid     (cpu_bus_valid),
+        .cpu_write     (cpu_bus_write),
+        .cpu_addr      (cpu_dmem_addr),
+        .cpu_wdata     (cpu_dmem_wdata),
+        .cpu_ready     (cpu_dmem_ready),
+        .cpu_rdata     (cpu_dmem_rdata),
+
+        .slave_valid   (bus_valid),
+        .slave_write   (bus_write),
+        .slave_addr    (bus_addr),
+        .slave_wdata   (bus_wdata),
+        .slave_ready   (bus_ready),
+        .slave_rdata   (bus_rdata)
+    );
+
+    /*==============================
+      CPU core
+      ==============================*/
+    core core (
+        .clk         (clk),
+        .rst         (core_rst),
+        .imem_addr   (imem_addr),
+        .imem_rdata  (imem_rdata),
+        .dmem_addr   (cpu_dmem_addr),
+        .dmem_wdata  (cpu_dmem_wdata),
+        .dmem_we     (cpu_dmem_we),
+        .dmem_re     (cpu_dmem_re),
+        .dmem_ready  (cpu_dmem_ready),
+        .dmem_rdata  (cpu_dmem_rdata)
+    );
+
+    // IMEM은 다음 단계에서 32-bit SRAM + loader write path로 교체한다.
+    InstructionMem IM (
+        .pc          (imem_addr),
+        .instruction (imem_rdata)
+    );
+
+    /*==============================
+      DMEM slave
+      ==============================*/
+    sram_wrapper64b data_sram (
+        .clk   (clk),
+        .rst   (rst),
+        .addr  (bus_addr),
+        .wdata (bus_wdata),
+        .we    (bus_valid &&  bus_write),
+        .re    (bus_valid && !bus_write),
+        .ready (bus_ready),
+        .rdata (bus_rdata)
     );
 
 endmodule
