@@ -6,6 +6,8 @@ module core(
 
     // instruction memory interface
     output wire [63:0] imem_addr,
+    input  wire        imem_rvalid,
+    input  wire [63:0] imem_raddr,
     input  wire [31:0] imem_rdata,
 
     // data memory request/ack interface
@@ -50,6 +52,8 @@ module core(
         .muxb(fwdmuxb_ex),
 
         .imem_addr(imem_addr),
+        .imem_rvalid(imem_rvalid),
+        .imem_raddr(imem_raddr),
         .imem_rdata(imem_rdata),
 
         .dmem_addr(dmem_addr),
