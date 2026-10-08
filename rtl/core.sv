@@ -4,13 +4,19 @@ module core(
     input wire clk,
     input wire rst,
 
-    // instruction memory interface
-    output wire [63:0] imem_addr,
-    input  wire        imem_rvalid,
-    input  wire [63:0] imem_raddr,
-    input  wire [31:0] imem_rdata,
+    // instruction memory pipelined request/response interface
+    output wire [63:0] imem_req_addr,
+    output wire        imem_req_valid,
+    input  wire        imem_req_ready,
 
-    // data memory request/ack interface
+    input  wire        imem_rsp_valid,
+    output wire        imem_rsp_ready,
+    input  wire [63:0] imem_rsp_addr,
+    input  wire [31:0] imem_rsp_data,
+
+    output wire        imem_flush,
+
+    // data memory blocking request/completion interface
     output wire [63:0] dmem_addr,
     output wire [63:0] dmem_wdata,
     output wire        dmem_we,
@@ -51,10 +57,14 @@ module core(
         .muxa(fwdmuxa_ex),
         .muxb(fwdmuxb_ex),
 
-        .imem_addr(imem_addr),
-        .imem_rvalid(imem_rvalid),
-        .imem_raddr(imem_raddr),
-        .imem_rdata(imem_rdata),
+        .imem_req_addr(imem_req_addr),
+        .imem_req_valid(imem_req_valid),
+        .imem_req_ready(imem_req_ready),
+        .imem_rsp_valid(imem_rsp_valid),
+        .imem_rsp_ready(imem_rsp_ready),
+        .imem_rsp_addr(imem_rsp_addr),
+        .imem_rsp_data(imem_rsp_data),
+        .imem_flush(imem_flush),
 
         .dmem_addr(dmem_addr),
         .dmem_wdata(dmem_wdata),
