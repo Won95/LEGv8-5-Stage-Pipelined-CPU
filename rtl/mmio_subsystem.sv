@@ -11,6 +11,7 @@ module mmio_subsystem (
 
     input  wire [63:0] gpio_in,
     output wire [63:0] gpio_out,
+    output wire [63:0] gpio_oe,
 
     input  wire        uart_rx_valid,
     input  wire [7:0]  uart_rx_data,
@@ -46,7 +47,8 @@ module mmio_subsystem (
         .ready    (gpio_ready),
         .rdata    (gpio_rdata),
         .gpio_in  (gpio_in),
-        .gpio_out (gpio_out)
+        .gpio_out (gpio_out),
+        .gpio_oe  (gpio_oe)
     );
 
     mmio_uart uart (
