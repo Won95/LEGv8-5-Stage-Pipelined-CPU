@@ -5,52 +5,79 @@
 - Process used for PD practice: Sky130
 - Package model assumption: 200-pin MQFP
 - Die-to-package connection: wire bonding
-- `soc_top` remains the functional SoC integration top.
-- A later `chip_top` will adapt internal wide interfaces to package-level pins.
+- `soc_top` is the internal SoC integration top.
+- `chip_top` is the package-facing top.
 
-## Why a separate chip_top is required
+The 200-pin MQFP assumption is a project packaging model, not a requirement imposed by Sky130.
 
-The current `soc_top` exposes wide verification-oriented interfaces:
+## Why chip_top is separate
 
-| Interface | Pins |
+`soc_top` intentionally exposes wide internal/verification interfaces. If those signals were treated as package pins, the count would be excessive:
+
+| Internal interface | Signals |
 |---|---:|
 | clk + rst | 2 |
-| External loader (`ext_valid`, `ext_target`, `ext_last`, `ext_addr[63:0]`, `ext_wdata[63:0]`, `ext_ready`) | 132 |
-| GPIO (`gpio_in[63:0]`, `gpio_out[63:0]`) | 128 |
-| UART byte-stream (`valid/data/ready` RX + TX) | 20 |
+| External loader stream | 132 |
+| GPIO in/out/output-enable | 192 |
+| UART byte-stream ready/valid interfaces | 20 |
 | `load_done` | 1 |
-| **Current signal total** | **283** |
+| **Total** | **347** |
 
-This already exceeds a 200-pin package before power and ground pins are counted.
+These are not intended to be physical package pins.
 
-## Package-level architecture
-
-The package-facing `chip_top` should keep the internal SoC unchanged and reduce only the external interfaces:
+## Final package-level architecture
 
 ```text
-200-pin MQFP
-     |
-  chip_top
-     |
-     +-- clk / reset
-     +-- serial boot interface
-     +-- UART RX/TX pins
-     +-- GPIO pins
-     +-- status/test pins
-     |
-  soc_top
-     +-- LEGv8 core
-     +-- AHB-Lite
-     +-- IMEM SRAM x1
-     +-- DMEM SRAM x2
-     +-- MMIO
+                200-pin MQFP
+                     |
+                  chip_top
+                     |
+        +------------+------------+
+        |            |            |
+     clk/reset    UART RX/TX    GPIO[31:0]
+                     |
+        +------------+------------+
+                     |
+                  soc_top
+        +------------+------------+
+        |            |            |
+      LEGv8       AHB-Lite       MMIO
+        |                         |
+   IMEM / DMEM                 GPIO/UART
+     SRAM x3
 ```
+
+The same physical UART pins are reused for two phases:
+
+1. Boot phase (`load_done=0`)
+   - UART RX -> UART PHY -> boot packet receiver -> FIFO -> Loader -> IMEM/DMEM
+   - CPU remains in reset.
+2. Runtime phase (`load_done=1`)
+   - UART RX/TX -> UART PHY -> MMIO UART FIFOs -> CPU through AHB-Lite.
+
+No external working memory bus is exposed. IMEM and DMEM stay on-die as SRAM hard macros.
+
+## UART boot packet format
+
+Each memory-write record is 17 bytes:
+
+```text
+byte 0     : control
+             bit[1] = last
+             bit[0] = target (0=IMEM, 1=DMEM)
+byte 1~8   : 64-bit address, little-endian
+byte 9~16  : 64-bit data, little-endian
+```
+
+For IMEM writes the loader uses `data[31:0]`. For DMEM writes the full 64-bit data field is used.
+
+The final record sets `last=1`. After that write completes, `load_done` is asserted and the CPU leaves reset.
 
 ## Initial 200-pin budget
 
-This is a project-level engineering assumption, not a Sky130 package requirement.
-
 ### Power / ground: 32 pins
+
+This is an initial project allocation and can be changed when a concrete padframe is built.
 
 | Net class | Pins |
 |---|---:|
@@ -60,44 +87,46 @@ This is a project-level engineering assumption, not a Sky130 package requirement
 | VSSIO (I/O ground) | 8 |
 | **Subtotal** | **32** |
 
-### Functional signals: 137 pins
+### Functional signals: 37 pins
 
 | Signal group | Pins | Note |
 |---|---:|---|
 | Clock | 1 | `clk` |
-| Reset | 1 | package reset |
-| Boot SPI | 4 | `boot_sclk`, `boot_cs_n`, `boot_mosi`, `boot_miso` |
-| UART | 2 | bit-level `uart_rx`, `uart_tx` |
-| GPIO input | 64 | preserves current MMIO GPIO input width |
-| GPIO output | 64 | preserves current MMIO GPIO output width |
+| Reset | 1 | active-high `rst` |
+| UART | 2 | `uart_rx`, `uart_tx`; shared by boot and runtime |
+| GPIO | 32 | bidirectional `gpio[31:0]` |
 | Load status | 1 | `load_done` |
-| **Subtotal** | **137** | |
+| **Subtotal** | **37** | |
 
-### Reserved / test / future: 31 pins
+### Reserved / test / NC: 131 pins
 
-200 - 32 - 137 = 31 pins remain for future test/debug signals, extra power pins, package constraints, or NC pins.
+```text
+200 - 32 - 37 = 131
+```
+
+Unused package leads may remain NC or later be allocated to JTAG/debug, additional GPIO, test access, clocking, extra supply/ground, or other interfaces.
 
 ## Total
 
 ```text
 Power / ground       32
-Functional signals  137
-Reserved / NC        31
------------------------
-Total               200
+Functional signals   37
+Reserved / test / NC 131
+------------------------
+Total                200
 ```
 
-## Next implementation step
+## PD boundary
 
-Do not expose the current 130-bit loader stream at package level.
+```text
+On die:
+LEGv8 + AHB-Lite + FIFO/Loader + MMIO + SRAM hard macros + I/O cells
 
-Add a `chip_top` wrapper with:
+Die boundary:
+I/O pads
 
-1. SPI-like boot receiver / packet deserializer
-   - converts package pins into the existing `ext_valid/ext_target/ext_last/ext_addr/ext_wdata/ext_ready` stream.
-2. Bit-level UART PHY
-   - converts `uart_rx/uart_tx` package pins into the existing internal UART byte-stream ready/valid interface.
-3. Existing GPIO mapping
-   - keeps `gpio_in[63:0]` and `gpio_out[63:0]` package-visible for now.
+Off die:
+bonding wire -> MQFP lead frame -> PCB
+```
 
-The AHB-Lite bus, SRAM buses, and wide internal data paths remain entirely inside the die and consume no package pins.
+AHB-Lite, SRAM data/address buses, and the 130-bit loader packet remain internal to the die and therefore consume no package pins.
