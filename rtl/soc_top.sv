@@ -10,11 +10,12 @@ module soc_top (
     input  wire [63:0] ext_wdata,
     output wire        ext_ready,
 
-    // Minimal GPIO MMIO pins
+    // GPIO MMIO signals
     input  wire [63:0] gpio_in,
     output wire [63:0] gpio_out,
+    output wire [63:0] gpio_oe,
 
-    // UART byte-stream pins. Bit-level UART PHY is intentionally outside this SoC.
+    // UART byte-stream signals
     input  wire        uart_rx_valid,
     input  wire [7:0]  uart_rx_data,
     output wire        uart_rx_ready,
@@ -294,6 +295,7 @@ module soc_top (
 
       0x0100 : GPIO_OUT
       0x0108 : GPIO_IN
+      0x0110 : GPIO_OE
       0x0120 : UART_RXDATA
       0x0128 : UART_TXDATA
       0x0130 : UART_STATUS
@@ -310,6 +312,7 @@ module soc_top (
 
         .gpio_in       (gpio_in),
         .gpio_out      (gpio_out),
+        .gpio_oe       (gpio_oe),
 
         .uart_rx_valid (uart_rx_valid),
         .uart_rx_data  (uart_rx_data),
