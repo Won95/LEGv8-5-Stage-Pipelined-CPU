@@ -10,11 +10,13 @@ module mmio_gpio (
     output reg  [63:0] rdata,
 
     input  wire [63:0] gpio_in,
-    output reg  [63:0] gpio_out
+    output reg  [63:0] gpio_out,
+    output reg  [63:0] gpio_oe
 );
 
     localparam [63:0] GPIO_OUT_ADDR = 64'h0000_0000_0000_0100;
     localparam [63:0] GPIO_IN_ADDR  = 64'h0000_0000_0000_0108;
+    localparam [63:0] GPIO_OE_ADDR  = 64'h0000_0000_0000_0110;
 
     // This peripheral is single-cycle from the bus point of view.
     assign ready = valid;
@@ -23,6 +25,7 @@ module mmio_gpio (
         case (addr)
             GPIO_OUT_ADDR: rdata = gpio_out;
             GPIO_IN_ADDR : rdata = gpio_in;
+            GPIO_OE_ADDR : rdata = gpio_oe;
             default      : rdata = 64'd0;
         endcase
     end
@@ -30,9 +33,14 @@ module mmio_gpio (
     always @(posedge clk) begin
         if (rst) begin
             gpio_out <= 64'd0;
+            gpio_oe  <= 64'd0;
         end
-        else if (valid && write && (addr == GPIO_OUT_ADDR)) begin
-            gpio_out <= wdata;
+        else if (valid && write) begin
+            case (addr)
+                GPIO_OUT_ADDR: gpio_out <= wdata;
+                GPIO_OE_ADDR : gpio_oe  <= wdata;
+                default      : begin end
+            endcase
         end
     end
 
