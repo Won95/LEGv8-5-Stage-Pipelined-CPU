@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1000" viewBox="0 0 1800 1000">
+  <style>
+    text { font-family: Arial, 'Noto Sans KR', sans-serif; fill: #111; }
+    .title { font-size: 30px; font-weight: 700; }
+    .section { font-size: 24px; font-weight: 700; }
+    .label { font-size: 18px; font-weight: 700; }
+    .small { font-size: 15px; }
+    .tiny { font-size: 13px; }
+    .box { fill: #fff; stroke: #111; stroke-width: 2; }
+    .stage { fill: #f7f7f7; stroke: #111; stroke-width: 2; }
+    .pipe { fill: #ddd; stroke: #111; stroke-width: 1.5; }
+    .dash { fill: none; stroke: #111; stroke-width: 2; stroke-dasharray: 8 8; }
+    .line { fill: none; stroke: #111; stroke-width: 2; marker-end: url(#arrow); }
+    .thin { fill: none; stroke: #111; stroke-width: 1.5; marker-end: url(#arrow); }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,3.5 L0,7 z" fill="#111"/>
+    </marker>
+  </defs>
+
+  <rect width="1800" height="1000" fill="#fff"/>
+
+  <text x="25" y="38" class="title">1. 전체 구조도 (chip_top / soc_top)</text>
+  <text x="790" y="38" class="title">2. LEGv8 Core 구조 (5-Stage Pipeline)</text>
+
+  <!-- Overall chip -->
+  <rect x="35" y="65" width="705" height="515" rx="6" class="box"/>
+  <text x="55" y="98" class="section">chip_top</text>
+  <rect x="60" y="120" width="655" height="390" rx="4" class="box"/>
+  <text x="80" y="152" class="section">soc_top</text>
+
+  <rect x="85" y="205" width="165" height="135" rx="4" class="stage"/>
+  <text x="168" y="250" text-anchor="middle" class="label">LEGv8 Core</text>
+  <text x="168" y="278" text-anchor="middle" class="small">5-stage pipeline</text>
+
+  <rect x="335" y="200" width="150" height="145" rx="4" class="stage"/>
+  <text x="410" y="245" text-anchor="middle" class="label">AHB-Lite</text>
+  <text x="410" y="272" text-anchor="middle" class="small">Master + Fabric</text>
+  <text x="410" y="299" text-anchor="middle" class="small">Data Bus</text>
+
+  <rect x="535" y="145" width="155" height="100" rx="4" class="stage"/>
+  <text x="612" y="182" text-anchor="middle" class="label">Instruction SRAM</text>
+  <text x="612" y="210" text-anchor="middle" class="small">32-bit macro x1</text>
+
+  <rect x="535" y="275" width="155" height="100" rx="4" class="stage"/>
+  <text x="612" y="312" text-anchor="middle" class="label">Data SRAM</text>
+  <text x="612" y="340" text-anchor="middle" class="small">32-bit macro x2</text>
+  <text x="612" y="362" text-anchor="middle" class="tiny">logical 64-bit DMEM</text>
+
+  <rect x="535" y="405" width="155" height="80" rx="4" class="stage"/>
+  <text x="612" y="437" text-anchor="middle" class="label">MMIO</text>
+  <text x="612" y="464" text-anchor="middle" class="small">GPIO / UART</text>
+
+  <path d="M250 252 L335 252" class="line"/>
+  <text x="292" y="238" text-anchor="middle" class="tiny">Load / Store</text>
+
+  <path d="M250 220 L300 220 L300 175 L535 175" class="line"/>
+  <text x="390" y="163" text-anchor="middle" class="tiny">Instruction Fetch</text>
+
+  <path d="M485 285 L535 325" class="line"/>
+  <path d="M485 300 L515 300 L515 445 L535 445" class="line"/>
+  <text x="500" y="275" class="tiny">0x0000-0x00FF</text>
+  <text x="492" y="430" class="tiny">0x0100-0x01FF</text>
+
+  <rect x="85" y="525" width="165" height="40" rx="3" class="stage"/>
+  <text x="168" y="551" text-anchor="middle" class="small">clk / reset</text>
+  <path d="M168 525 L168 340" class="thin"/>
+
+  <rect x="535" y="525" width="155" height="40" rx="3" class="stage"/>
+  <text x="612" y="551" text-anchor="middle" class="small">I/O boundary</text>
+  <path d="M612 525 L612 485" class="thin"/>
+
+  <!-- Zoom dashed lines -->
+  <path d="M715 150 L770 75" class="dash"/>
+  <path d="M715 500 L770 570" class="dash"/>
+
+  <!-- Core detail -->
+  <rect x="770" y="65" width="995" height="515" rx="6" class="box"/>
+  <text x="790" y="100" class="section">LEGv8 Core</text>
+
+  <!-- stages -->
+  <rect x="790" y="125" width="170" height="310" rx="4" class="stage"/>
+  <rect x="985" y="125" width="170" height="310" rx="4" class="stage"/>
+  <rect x="1180" y="125" width="170" height="310" rx="4" class="stage"/>
+  <rect x="1375" y="125" width="170" height="310" rx="4" class="stage"/>
+  <rect x="1570" y="125" width="170" height="310" rx="4" class="stage"/>
+
+  <text x="875" y="158" text-anchor="middle" class="section">IF</text>
+  <text x="1070" y="158" text-anchor="middle" class="section">ID</text>
+  <text x="1265" y="158" text-anchor="middle" class="section">EX</text>
+  <text x="1460" y="158" text-anchor="middle" class="section">MEM</text>
+  <text x="1655" y="158" text-anchor="middle" class="section">WB</text>
+
+  <text x="875" y="182" text-anchor="middle" class="small">Instruction Fetch</text>
+  <text x="1070" y="182" text-anchor="middle" class="small">Decode / Reg Read</text>
+  <text x="1265" y="182" text-anchor="middle" class="small">Execute</text>
+  <text x="1460" y="182" text-anchor="middle" class="small">Memory Access</text>
+  <text x="1655" y="182" text-anchor="middle" class="small">Write Back</text>
+
+  <!-- IF internals -->
+  <rect x="810" y="225" width="55" height="55" class="box"/>
+  <text x="838" y="258" text-anchor="middle" class="label">PC</text>
+  <rect x="885" y="215" width="60" height="75" class="box"/>
+  <text x="915" y="242" text-anchor="middle" class="tiny">IMEM</text>
+  <text x="915" y="260" text-anchor="middle" class="tiny">Req/Rsp</text>
+  <rect x="860" y="315" width="55" height="45" class="box"/>
+  <text x="888" y="343" text-anchor="middle" class="label">+4</text>
+  <path d="M865 252 L885 252" class="thin"/>
+
+  <!-- Pipeline regs -->
+  <rect x="960" y="200" width="18" height="205" class="pipe"/>
+  <text x="969" y="195" text-anchor="middle" class="tiny">IF/ID</text>
+  <rect x="1155" y="200" width="18" height="205" class="pipe"/>
+  <text x="1164" y="195" text-anchor="middle" class="tiny">ID/EX</text>
+  <rect x="1350" y="200" width="18" height="205" class="pipe"/>
+  <text x="1359" y="195" text-anchor="middle" class="tiny">EX/MEM</text>
+  <rect x="1545" y="200" width="18" height="205" class="pipe"/>
+  <text x="1554" y="195" text-anchor="middle" class="tiny">MEM/WB</text>
+
+  <!-- ID internals -->
+  <rect x="1005" y="215" width="125" height="55" class="box"/>
+  <text x="1067" y="240" text-anchor="middle" class="small">Hazard Detection</text>
+  <text x="1067" y="259" text-anchor="middle" class="tiny">stall / bubble</text>
+  <rect x="1005" y="285" width="125" height="50" class="box"/>
+  <text x="1067" y="316" text-anchor="middle" class="small">Control Unit</text>
+  <rect x="1005" y="350" width="125" height="60" class="box"/>
+  <text x="1067" y="376" text-anchor="middle" class="small">Register File</text>
+  <text x="1067" y="397" text-anchor="middle" class="tiny">32 x 64-bit</text>
+
+  <!-- EX internals -->
+  <path d="M1205 235 L1275 235 L1305 265 L1275 295 L1205 295 Z" class="box"/>
+  <text x="1260" y="271" text-anchor="middle" class="label">ALU</text>
+  <rect x="1205" y="320" width="120" height="45" class="box"/>
+  <text x="1265" y="348" text-anchor="middle" class="small">Forwarding Unit</text>
+  <rect x="1205" y="375" width="120" height="35" class="box"/>
+  <text x="1265" y="398" text-anchor="middle" class="tiny">Branch / Flush</text>
+
+  <!-- MEM internals -->
+  <rect x="1410" y="245" width="100" height="85" class="box"/>
+  <text x="1460" y="277" text-anchor="middle" class="small">AHB-Lite</text>
+  <text x="1460" y="299" text-anchor="middle" class="small">Load / Store</text>
+  <text x="1460" y="319" text-anchor="middle" class="tiny">DMEM / MMIO</text>
+
+  <!-- WB internals -->
+  <rect x="1600" y="260" width="110" height="65" class="box"/>
+  <text x="1655" y="286" text-anchor="middle" class="small">Write Back</text>
+  <text x="1655" y="307" text-anchor="middle" class="tiny">ALU / Load Data</text>
+
+  <!-- Main stage flow -->
+  <path d="M945 252 L960 252" class="thin"/>
+  <path d="M978 252 L1005 252" class="thin"/>
+  <path d="M1130 295 L1155 295" class="thin"/>
+  <path d="M1173 270 L1205 270" class="thin"/>
+  <path d="M1305 270 L1350 270" class="thin"/>
+  <path d="M1368 287 L1410 287" class="thin"/>
+  <path d="M1510 287 L1545 287" class="thin"/>
+  <path d="M1563 292 L1600 292" class="thin"/>
+
+  <!-- Feedback paths -->
+  <path d="M1655 325 L1655 455 L1067 455 L1067 410" class="thin"/>
+  <path d="M1460 330 L1460 470 L1265 470 L1265 365" class="thin"/>
+  <path d="M1265 410 L1265 490 L838 490 L838 280" class="thin"/>
+  <text x="1225" y="515" class="tiny">branch redirect / hazard hold / forwarding feedback</text>
+
+  <!-- Bottom left map -->
+  <text x="25" y="630" class="title">3. 메모리 맵</text>
+  <rect x="25" y="650" width="775" height="305" class="box"/>
+  <line x1="25" y1="695" x2="800" y2="695" stroke="#111" stroke-width="2"/>
+  <line x1="270" y1="650" x2="270" y2="955" stroke="#111" stroke-width="1.5"/>
+  <line x1="520" y1="650" x2="520" y2="955" stroke="#111" stroke-width="1.5"/>
+  <text x="145" y="680" text-anchor="middle" class="label">Address</text>
+  <text x="395" y="680" text-anchor="middle" class="label">Block</text>
+  <text x="660" y="680" text-anchor="middle" class="label">Description</text>
+
+  <g class="small">
+    <text x="40" y="730">0x0000 - 0x00FF</text><text x="295" y="730">DMEM</text><text x="540" y="730">64-bit data memory</text>
+    <text x="40" y="770">0x0100</text><text x="295" y="770">GPIO_OUT</text><text x="540" y="770">GPIO output register</text>
+    <text x="40" y="810">0x0108</text><text x="295" y="810">GPIO_IN</text><text x="540" y="810">GPIO input register</text>
+    <text x="40" y="850">0x0110</text><text x="295" y="850">GPIO_OE</text><text x="540" y="850">GPIO output enable</text>
+    <text x="40" y="890">0x0120 / 0x0128</text><text x="295" y="890">UART RX / TX</text><text x="540" y="890">UART byte-stream data</text>
+    <text x="40" y="930">0x0130</text><text x="295" y="930">UART_STATUS</text><text x="540" y="930">RX valid / TX ready</text>
+  </g>
+
+  <!-- Bottom right summary -->
+  <text x="845" y="630" class="title">4. 데이터 흐름 요약</text>
+  <rect x="845" y="650" width="920" height="305" class="box"/>
+  <g class="small">
+    <text x="875" y="700">1. CPU IF stage가 dedicated IMEM request/response path로 Instruction SRAM 접근</text>
+    <text x="875" y="745">2. 명령어는 IF → ID → EX → MEM → WB 5-stage pipeline을 거쳐 실행</text>
+    <text x="875" y="790">3. Load / Store는 CPU data request → AHB-Lite → DMEM 또는 MMIO로 전달</text>
+    <text x="875" y="835">4. Hazard Detection이 stall / bubble을 제어하고 Forwarding이 RAW dependency를 우회</text>
+    <text x="875" y="880">5. Taken branch에서는 잘못 fetch된 instruction을 flush하고 PC를 redirect</text>
+    <text x="875" y="925">6. Physical SRAM macro: IMEM x1 + DMEM LOW x1 + DMEM HIGH x1 = 총 3개</text>
+  </g>
+</svg>
