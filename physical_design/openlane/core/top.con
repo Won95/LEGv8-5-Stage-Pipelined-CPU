@@ -7,10 +7,10 @@
 #   - Post-PnR STA uses it through SIGNOFF_SDC_FILE.
 #
 # Constraint policy:
-#   - IDEC-style 7 ns implementation clock target
-#   - IDEC-style source/network clock latency assumptions
+#   - IDEC-style implementation clock and clock-latency assumptions
 #   - OpenLane/Sky130 uncertainty, transition, DRC limits, load, and derate
-#   - I/O max-delay budget = 60% of clock period
+#   - I/O max delay is derived from the remaining setup budget
+#   - Input/output internal path target (Tmax): 6.0 ns
 #   - Synchronous reset driven by the weakest Sky130 HD buffer
 #===============================================================================
 
@@ -21,7 +21,7 @@ set clk_period $::env(CLOCK_PERIOD)
 set half_period [expr {$clk_period / 2.0}]
 set clk_port [get_ports clk]
 
-# IDEC/DC reference style: 7 ns period with a 50% duty waveform {3.5 7.0}.
+# IDEC/DC reference waveform style. For CLOCK_PERIOD=7 ns this is {3.5 7.0}.
 create_clock \
     -name MAIN_CLOCK \
     -period $clk_period \
@@ -46,7 +46,7 @@ if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL
     set_propagated_clock $core_clock
 }
 
-# Use the OpenLane/Sky130 timing-environment values for clock non-idealities.
+# Use OpenLane/Sky130 values for clock non-idealities.
 set_clock_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT) $core_clock
 set_clock_transition  $::env(CLOCK_TRANSITION_CONSTRAINT)  $core_clock
 
@@ -64,16 +64,36 @@ if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
 }
 
 #-------------------------------------------------------------------------------
+# I/O TIMING BUDGET
+#-------------------------------------------------------------------------------
+# Budgeting intent:
+#
+#   input_delay(max)  = Tclk - uncertainty - Tmax(input port -> FF D)
+#   output_delay(max) = Tclk - uncertainty - Tmax(FF Q -> output port)
+#
+# The internal input/output path target is intentionally set to 6.0 ns for this
+# experiment. OpenSTA still performs the actual setup check with library setup
+# time, clock latency/skew, derate, etc.; these values are a block-level budget.
+set input_internal_tmax  6.0
+set output_internal_tmax 6.0
+set setup_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT)
+
+set input_delay_max  [expr {$clk_period - $setup_uncertainty - $input_internal_tmax}]
+set output_delay_max [expr {$clk_period - $setup_uncertainty - $output_internal_tmax}]
+
+puts "[INFO] Input internal Tmax : $input_internal_tmax ns"
+puts "[INFO] Output internal Tmax: $output_internal_tmax ns"
+puts "[INFO] Input max delay     : $input_delay_max ns"
+puts "[INFO] Output max delay    : $output_delay_max ns"
+
+#-------------------------------------------------------------------------------
 # INPUT TIMING / DRIVE
 #-------------------------------------------------------------------------------
 # core_pd_top has only clk and synchronous rst as primary inputs.
-# Reserve 60% of the clock period for external I/O delay.
-# For CLOCK_PERIOD=7 ns, io_delay_max = 4.2 ns.
-set io_delay_max [expr {$clk_period * 0.60}]
 set rst_port [get_ports rst]
 
-set_input_delay -max $io_delay_max -clock $core_clock $rst_port
-set_input_delay -min 0.0           -clock $core_clock $rst_port
+set_input_delay -max $input_delay_max -clock $core_clock $rst_port
+set_input_delay -min 0.0              -clock $core_clock $rst_port
 
 # Model the non-clock input with the weakest Sky130 HD buffer.
 # Clock quality is modeled separately with set_clock_transition above.
@@ -86,9 +106,8 @@ set_driving_cell \
 # OUTPUT TIMING / LOAD
 #-------------------------------------------------------------------------------
 # Treat the standalone monitor outputs as timed block outputs for this experiment.
-# Do not false-path them: their timing is part of the old-vs-new SDC comparison.
-set_output_delay -max $io_delay_max -clock $core_clock [all_outputs]
-set_output_delay -min 0.0           -clock $core_clock [all_outputs]
+set_output_delay -max $output_delay_max -clock $core_clock [all_outputs]
+set_output_delay -min 0.0               -clock $core_clock [all_outputs]
 
 # Use OpenLane's PDK-selected representative output load.
 # OUTPUT_CAP_LOAD is in fF; OpenSTA set_load uses pF in this library setup.
