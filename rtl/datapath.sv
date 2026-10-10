@@ -194,14 +194,10 @@ module datapath(
          WB stage
       ==============*/
 
-    logic MemtoReg_wb;
-    logic [63:0] result_wb;
-    logic [63:0] Readmemdata_wb;
+    // The final writeback value is itself a MEM/WB register.  Selecting load
+    // data vs. ALU data before the register removes MemtoReg_wb from the next
+    // cycle's WB-forwarding -> EX-ALU critical path.
     logic [63:0] Regwritedata_wb;
-
-    always_comb begin
-        Regwritedata_wb = MemtoReg_wb ? Readmemdata_wb : result_wb;
-    end
 
     /*==============
          Pipeline registers
@@ -321,27 +317,23 @@ module datapath(
 
     // MEM/WB: when MEM waits, retire the current WB once and inject a bubble so
     // the same architectural write cannot repeat every wait-state cycle.
+    // The load/ALU choice is made on the D side of Regwritedata_wb instead of
+    // after the register, cutting a 64-bit WB mux out of every forwarded path.
     always @(posedge clk) begin
         if (rst) begin
-            MemtoReg_wb     <= 1'b0;
-            Regwrite_wb     <= 1'b0;
-            Rd_wb           <= 5'd0;
-            result_wb       <= 64'd0;
-            Readmemdata_wb  <= 64'd0;
+            Regwrite_wb      <= 1'b0;
+            Rd_wb            <= 5'd0;
+            Regwritedata_wb  <= 64'd0;
         end
         else if (mem_wait) begin
-            MemtoReg_wb     <= 1'b0;
-            Regwrite_wb     <= 1'b0;
-            Rd_wb           <= 5'd0;
-            result_wb       <= 64'd0;
-            Readmemdata_wb  <= 64'd0;
+            Regwrite_wb      <= 1'b0;
+            Rd_wb            <= 5'd0;
+            Regwritedata_wb  <= 64'd0;
         end
         else begin
-            MemtoReg_wb     <= MemtoReg_mem;
-            Regwrite_wb     <= Regwrite_mem;
-            Rd_wb           <= Rd_mem;
-            result_wb       <= result_mem;
-            Readmemdata_wb  <= Readmemdata_mem;
+            Regwrite_wb      <= Regwrite_mem;
+            Rd_wb            <= Rd_mem;
+            Regwritedata_wb  <= MemtoReg_mem ? Readmemdata_mem : result_mem;
         end
     end
 
