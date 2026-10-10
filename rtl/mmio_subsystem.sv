@@ -22,18 +22,17 @@ module mmio_subsystem (
     input  wire        uart_tx_ready
 );
 
-    // MMIO sub-map inside 0x0100~0x01FF
-    //   0x0100~0x011F : GPIO
-    //   0x0120~0x013F : UART
+    // The AHB fabric already guarantees that this block is selected only for
+    // 0x0100~0x01FF.  Decode only the local low address bits here instead of
+    // repeating a 56-bit upper-address comparison on every MMIO access.
     wire select_gpio;
     wire select_uart;
 
-    assign select_gpio = (addr[63:8] == 56'd1) && (addr[7:5] == 3'b000);
-    assign select_uart = (addr[63:8] == 56'd1) && (addr[7:5] == 3'b001);
+    assign select_gpio = (addr[7:5] == 3'b000);
+    assign select_uart = (addr[7:5] == 3'b001);
 
     wire        gpio_ready;
     wire [63:0] gpio_rdata;
-
     wire        uart_ready;
     wire [63:0] uart_rdata;
 
@@ -60,17 +59,14 @@ module mmio_subsystem (
         .wdata    (wdata),
         .ready    (uart_ready),
         .rdata    (uart_rdata),
-
         .rx_valid (uart_rx_valid),
         .rx_data  (uart_rx_data),
         .rx_ready (uart_rx_ready),
-
         .tx_valid (uart_tx_valid),
         .tx_data  (uart_tx_data),
         .tx_ready (uart_tx_ready)
     );
 
-    // Unmapped MMIO accesses complete immediately with zero.
     assign ready = select_gpio ? gpio_ready :
                    select_uart ? uart_ready :
                                  valid;
