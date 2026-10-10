@@ -1,17 +1,10 @@
 #===============================================================================
 # core_pd_top PnR / STA constraints
 #
-# OpenLane2 usage:
-#   - Yosys.Synthesis does NOT source this file.
-#   - OpenROAD pre/mid-PnR uses it through PNR_SDC_FILE.
-#   - Post-PnR STA uses it through SIGNOFF_SDC_FILE.
-#
-# Constraint policy:
-#   - IDEC-style implementation clock and clock-latency assumptions
-#   - OpenLane/Sky130 uncertainty, transition, DRC limits, load, and derate
-#   - I/O max delay is derived from the remaining setup budget
-#   - Input/output internal path target (Tmax): 6.0 ns
-#   - Synchronous reset driven by the weakest Sky130 HD buffer
+# Core-only block timing model:
+#   - Instruction/data memories are outside core_pd_top.
+#   - Their synchronous interface timing is represented with primary-I/O delays.
+#   - Full memory/macro timing is analyzed separately at soc_top level.
 #===============================================================================
 
 #-------------------------------------------------------------------------------
@@ -21,7 +14,6 @@ set clk_period $::env(CLOCK_PERIOD)
 set half_period [expr {$clk_period / 2.0}]
 set clk_port [get_ports clk]
 
-# IDEC/DC reference waveform style. For CLOCK_PERIOD=7 ns this is {3.5 7.0}.
 create_clock \
     -name MAIN_CLOCK \
     -period $clk_period \
@@ -30,21 +22,10 @@ create_clock \
 
 set core_clock [get_clocks MAIN_CLOCK]
 
-# IDEC reference assumptions used here as common-mode pre-CTS latencies:
-#   external clock source -> design clock port : 2 ns
-#   design clock port     -> internal FF clock : 1 ns before CTS
-#
-# Give the same min/max value so the assumed common clock latency shifts both
-# launch and capture edges equally. Using only -max makes setup choose a 3 ns
-# launch latency while capture can remain at 0 ns, artificially removing 3 ns
-# of the 7 ns cycle (and similarly distorting hold analysis).
-#
-# Source latency remains valid after CTS because it is external to this block.
+# Common-mode pre-CTS latency assumptions.
 set_clock_latency -source -min 2.0 $core_clock
 set_clock_latency -source -max 2.0 $core_clock
 
-# Before CTS, use a fixed 1 ns internal clock-network estimate. After CTS,
-# replace that estimate with the propagated physical clock tree.
 if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL_CLOCKS) } {
     set_clock_latency -min 1.0 $core_clock
     set_clock_latency -max 1.0 $core_clock
@@ -53,7 +34,6 @@ if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL
     set_propagated_clock $core_clock
 }
 
-# Use OpenLane/Sky130 values for clock non-idealities.
 set_clock_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT) $core_clock
 set_clock_transition  $::env(CLOCK_TRANSITION_CONSTRAINT)  $core_clock
 
@@ -71,16 +51,11 @@ if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
 }
 
 #-------------------------------------------------------------------------------
-# I/O TIMING BUDGET
+# BLOCK I/O TIMING BUDGET
 #-------------------------------------------------------------------------------
-# Budgeting intent:
-#
-#   input_delay(max)  = Tclk - uncertainty - Tmax(input port -> FF D)
-#   output_delay(max) = Tclk - uncertainty - Tmax(FF Q -> output port)
-#
-# The internal input/output path target is intentionally set to 6.0 ns for this
-# experiment. OpenSTA still performs the actual setup check with library setup
-# time, clock latency/skew, derate, etc.; these values are a block-level budget.
+# Reserve 6.0 ns for the core-internal portion of each synchronous I/O path.
+# With a 7 ns clock and 0.25 ns setup uncertainty this gives 0.75 ns of
+# external-interface budget at each block boundary.
 set input_internal_tmax  6.0
 set output_internal_tmax 6.0
 set setup_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT)
@@ -96,36 +71,34 @@ puts "\[INFO\] Output max delay    : $output_delay_max ns"
 #-------------------------------------------------------------------------------
 # INPUT TIMING / DRIVE
 #-------------------------------------------------------------------------------
-# core_pd_top has only clk and synchronous rst as primary inputs.
-set rst_port [get_ports rst]
+# All non-clock inputs are synchronous core-boundary signals:
+#   rst,
+#   imem_req_ready,
+#   imem_rsp_valid/imem_rsp_addr/imem_rsp_data,
+#   dmem_ready/dmem_rdata.
+set non_clock_inputs [remove_from_collection [all_inputs] $clk_port]
 
-set_input_delay -max $input_delay_max -clock $core_clock $rst_port
-set_input_delay -min 0.0              -clock $core_clock $rst_port
+set_input_delay -max $input_delay_max -clock $core_clock $non_clock_inputs
+set_input_delay -min 0.0              -clock $core_clock $non_clock_inputs
 
-# Model the non-clock input with the weakest Sky130 HD buffer.
-# Clock quality is modeled separately with set_clock_transition above.
 set_driving_cell \
     -lib_cell sky130_fd_sc_hd__buf_1 \
     -pin X \
-    $rst_port
+    $non_clock_inputs
 
 #-------------------------------------------------------------------------------
 # OUTPUT TIMING / LOAD
 #-------------------------------------------------------------------------------
-# Treat the standalone monitor outputs as timed block outputs for this experiment.
+# All memory-interface outputs are timed as block outputs.
 set_output_delay -max $output_delay_max -clock $core_clock [all_outputs]
 set_output_delay -min 0.0               -clock $core_clock [all_outputs]
 
-# Use OpenLane's PDK-selected representative output load.
-# OUTPUT_CAP_LOAD is in fF; OpenSTA set_load uses pF in this library setup.
 set cap_load [expr {$::env(OUTPUT_CAP_LOAD) / 1000.0}]
 set_load $cap_load [all_outputs]
 
 #-------------------------------------------------------------------------------
 # PVT / DERATE
 #-------------------------------------------------------------------------------
-# PVT corners are selected by OpenLane/PDK. Apply the standard OpenLane timing
-# derate on top of the selected corner.
 set_timing_derate -early [expr {1.0 - ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
 set_timing_derate -late  [expr {1.0 + ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
 
