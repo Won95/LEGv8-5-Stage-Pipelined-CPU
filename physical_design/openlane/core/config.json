@@ -1,0 +1,24 @@
+{
+    "DESIGN_NAME": "core_pd_top",
+
+    "VERILOG_FILES": [
+        "dir::./core_pd_top.sv",
+        "dir::../../../rtl/InstructionMem.sv",
+        "dir::../../../rtl/dataMem.sv",
+        "dir::../../../rtl/alu.sv",
+        "dir::../../../rtl/control.sv",
+        "dir::../../../rtl/core.sv",
+        "dir::../../../rtl/datapath.sv",
+        "dir::../../../rtl/forwarding_unit.sv",
+        "dir::../../../rtl/hazard_detection_unit.sv",
+        "dir::../../../rtl/program_counter.sv",
+        "dir::../../../rtl/register_file.sv",
+        "dir::../../../rtl/sign_extension.sv"
+    ],
+
+    "CLOCK_PORT": "clk",
+    "CLOCK_PERIOD": 6,
+    "UNCERTAINTY": 0.5,
+
+    "AREA": 0
+}
