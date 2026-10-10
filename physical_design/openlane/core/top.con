@@ -30,16 +30,23 @@ create_clock \
 
 set core_clock [get_clocks MAIN_CLOCK]
 
-# IDEC reference assumption:
-#   external clock source -> design clock port : max 2 ns
-#   design clock port     -> internal FF clock : max 1 ns before CTS
+# IDEC reference assumptions used here as common-mode pre-CTS latencies:
+#   external clock source -> design clock port : 2 ns
+#   design clock port     -> internal FF clock : 1 ns before CTS
+#
+# Give the same min/max value so the assumed common clock latency shifts both
+# launch and capture edges equally. Using only -max makes setup choose a 3 ns
+# launch latency while capture can remain at 0 ns, artificially removing 3 ns
+# of the 7 ns cycle (and similarly distorting hold analysis).
 #
 # Source latency remains valid after CTS because it is external to this block.
+set_clock_latency -source -min 2.0 $core_clock
 set_clock_latency -source -max 2.0 $core_clock
 
-# Before CTS, use the IDEC 1 ns maximum internal clock-network estimate.
-# After CTS, replace that estimate with the propagated physical clock tree.
+# Before CTS, use a fixed 1 ns internal clock-network estimate. After CTS,
+# replace that estimate with the propagated physical clock tree.
 if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL_CLOCKS) } {
+    set_clock_latency -min 1.0 $core_clock
     set_clock_latency -max 1.0 $core_clock
     unset_propagated_clock $core_clock
 } else {
