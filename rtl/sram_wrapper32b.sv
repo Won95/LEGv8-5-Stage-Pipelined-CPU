@@ -1,9 +1,8 @@
 module sram_wrapper32b (
-    `ifdef USE_POWER_PINS
+`ifdef USE_POWER_PINS
     inout wire vccd1,
     inout wire vssd1,
-    
-    `endif
+`endif
     input  wire        clk,
     input  wire        rst,
 
@@ -37,9 +36,6 @@ module sram_wrapper32b (
     wire [31:0] unused_dout0;
     wire [31:0] dout1;
 
-    /*==============================
-      Loader write port
-      ==============================*/
     assign prog_fire  = (prog_state == IDLE) && prog_valid;
     assign prog_ready = (prog_state == WAIT);
 
@@ -53,24 +49,19 @@ module sram_wrapper32b (
                     if (prog_valid)
                         prog_state <= WAIT;
                 end
-
-                WAIT: begin
-                    prog_state <= IDLE;
-                end
-
+                WAIT: prog_state <= IDLE;
                 default: prog_state <= IDLE;
             endcase
         end
     end
 
-    /*==============================
-      CPU pipelined read port
-
-      SRAM read latency가 1 cycle이므로 accepted request는 먼저
-      inflight slot에 들어간다. CPU가 갑자기 backpressure를 걸어도
-      이미 SRAM에 들어간 response를 잃지 않도록 response queue는
-      2-entry(response + skid)로 둔다.
-      ==============================*/
+    // ------------------------------------------------------------------------
+    // CPU pipelined read port
+    // ------------------------------------------------------------------------
+    // One request may be in the SRAM and up to two responses may be buffered.
+    // req_ready depends only on registered occupancy plus flush.  Deliberately
+    // do not borrow a same-cycle rsp_pop credit here: that optimization creates
+    // a long rsp_ready -> req_ready -> PC-enable combinational feedback path.
     reg        inflight_valid;
     reg [63:0] inflight_addr;
 
@@ -88,36 +79,26 @@ module sram_wrapper32b (
     assign rsp_data  = rsp_data0;
     assign rsp_fire  = rsp_valid && rsp_ready;
 
-    // queue에 저장된 response + SRAM에서 돌아올 inflight response를 합쳐
-    // 최대 2개까지만 outstanding으로 허용한다.
     assign outstanding = {1'b0, rsp_count} + inflight_valid;
-
-    // 현재 response를 같은 cycle에 consume한다면 그 자리까지 고려해
-    // 다음 request를 받을 수 있다.
-    assign req_ready = !flush && ((outstanding < 3'd2) || rsp_fire);
-    assign req_fire  = req_valid && req_ready;
-
-    // 이전 cycle에 SRAM으로 넣은 request의 data가 현재 cycle에 유효하다.
-    assign arrival = inflight_valid;
+    assign req_ready   = !flush && (outstanding < 3'd2);
+    assign req_fire    = req_valid && req_ready;
+    assign arrival     = inflight_valid;
 
     always @(posedge clk) begin
         if (rst || flush) begin
             inflight_valid <= 1'b0;
             inflight_addr  <= 64'd0;
-
-            rsp_count <= 2'd0;
-            rsp_addr0 <= 64'd0;
-            rsp_addr1 <= 64'd0;
-            rsp_data0 <= 32'd0;
-            rsp_data1 <= 32'd0;
+            rsp_count      <= 2'd0;
+            rsp_addr0      <= 64'd0;
+            rsp_addr1      <= 64'd0;
+            rsp_data0      <= 32'd0;
+            rsp_data1      <= 32'd0;
         end
         else begin
-            // Current accepted request becomes next cycle's inflight response.
             inflight_valid <= req_fire;
             if (req_fire)
                 inflight_addr <= req_addr;
 
-            // Response queue update. dout1 corresponds to inflight_addr.
             case (rsp_count)
                 2'd0: begin
                     if (arrival) begin
@@ -129,23 +110,14 @@ module sram_wrapper32b (
 
                 2'd1: begin
                     case ({rsp_fire, arrival})
-                        2'b00: begin
-                            rsp_count <= 2'd1;
-                        end
-
+                        2'b00: rsp_count <= 2'd1;
                         2'b01: begin
                             rsp_addr1 <= inflight_addr;
                             rsp_data1 <= dout1;
                             rsp_count <= 2'd2;
                         end
-
-                        2'b10: begin
-                            rsp_count <= 2'd0;
-                        end
-
+                        2'b10: rsp_count <= 2'd0;
                         2'b11: begin
-                            // Head is consumed while the inflight response
-                            // replaces it in the same cycle.
                             rsp_addr0 <= inflight_addr;
                             rsp_data0 <= dout1;
                             rsp_count <= 2'd1;
@@ -157,7 +129,6 @@ module sram_wrapper32b (
                     if (rsp_fire) begin
                         rsp_addr0 <= rsp_addr1;
                         rsp_data0 <= rsp_data1;
-
                         if (arrival) begin
                             rsp_addr1 <= inflight_addr;
                             rsp_data1 <= dout1;
@@ -175,11 +146,11 @@ module sram_wrapper32b (
     end
 
     sky130_sram_1kbyte_1rw1r_32x256_8 SRAM_IMEM (
-	`ifdef USE_POWER_PINS
-    	.vccd1(vccd1),
-    	.vssd1(vssd1),
-	`endif
-    	// Port0: loader write
+`ifdef USE_POWER_PINS
+        .vccd1(vccd1),
+        .vssd1(vssd1),
+`endif
+        // Port0: loader write
         .clk0   (clk),
         .csb0   (~prog_fire),
         .web0   (1'b0),
@@ -188,7 +159,7 @@ module sram_wrapper32b (
         .din0   (prog_wdata),
         .dout0  (unused_dout0),
 
-        // Port1: CPU instruction read. Only accepted requests hit the macro.
+        // Port1: CPU instruction read
         .clk1   (clk),
         .csb1   (~req_fire),
         .addr1  (req_addr[9:2]),
