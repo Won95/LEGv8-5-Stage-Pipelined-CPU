@@ -3,3 +3,5 @@
 *.fst
 
 physical_design/openlane/runs/
+physical_design/openlane/core/runs/
+physical_design/openlane/soc_top/runs/
