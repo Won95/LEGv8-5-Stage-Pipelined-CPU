@@ -81,10 +81,10 @@ set setup_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT)
 set input_delay_max  [expr {$clk_period - $setup_uncertainty - $input_internal_tmax}]
 set output_delay_max [expr {$clk_period - $setup_uncertainty - $output_internal_tmax}]
 
-puts "[INFO] Input internal Tmax : $input_internal_tmax ns"
-puts "[INFO] Output internal Tmax: $output_internal_tmax ns"
-puts "[INFO] Input max delay     : $input_delay_max ns"
-puts "[INFO] Output max delay    : $output_delay_max ns"
+puts "\[INFO\] Input internal Tmax : $input_internal_tmax ns"
+puts "\[INFO\] Output internal Tmax: $output_internal_tmax ns"
+puts "\[INFO\] Input max delay     : $input_delay_max ns"
+puts "\[INFO\] Output max delay    : $output_delay_max ns"
 
 #-------------------------------------------------------------------------------
 # INPUT TIMING / DRIVE
