@@ -1,6 +1,6 @@
 module chip_top (
 `ifdef USE_POWER_PINS
-    // Core / I/O power-domain rails.
+    // Internal core / I/O power-domain rails used by PDN and hard macros.
     inout wire        vccd1,
     inout wire        vssd1,
     inout wire        vddio,
@@ -13,6 +13,14 @@ module chip_top (
     inout wire        vssio_q,
 `endif
 
+    // Physical package-facing power pads.
+    inout wire        pad_vccd,
+    inout wire        pad_vssd,
+    inout wire        pad_vddio,
+    inout wire        pad_vssio,
+    inout wire        pad_vdda,
+    inout wire        pad_vssa,
+
     // Physical package-facing signal pads.
     inout wire        pad_clk,
     inout wire        pad_rst,
@@ -20,11 +28,11 @@ module chip_top (
 );
 
     /*======================================================================
-      Sky130 signal I/O pads
+      Sky130 I/O pad ring
 
       chip_top is the physical-design boundary.  The SoC itself keeps simple
       core-side logic signals; this wrapper translates them through real
-      sky130_ef_io__gpiov2_pad macros.
+      Sky130 signal pads and package power/ground pads.
       ======================================================================*/
     wire        clk_internal;
     wire        rst_internal;
@@ -34,17 +42,23 @@ module chip_top (
 
     io_pad_ring io_pads (
 `ifdef USE_POWER_PINS
-        .vccd1    (vccd1),
-        .vssd1    (vssd1),
-        .vddio    (vddio),
-        .vssio    (vssio),
-        .vdda     (vdda),
-        .vssa     (vssa),
-        .vswitch  (vswitch),
-        .vcchib   (vcchib),
-        .vddio_q  (vddio_q),
-        .vssio_q  (vssio_q),
+        .vccd1     (vccd1),
+        .vssd1     (vssd1),
+        .vddio     (vddio),
+        .vssio     (vssio),
+        .vdda      (vdda),
+        .vssa      (vssa),
+        .vswitch   (vswitch),
+        .vcchib    (vcchib),
+        .vddio_q   (vddio_q),
+        .vssio_q   (vssio_q),
 `endif
+        .pad_vccd  (pad_vccd),
+        .pad_vssd  (pad_vssd),
+        .pad_vddio (pad_vddio),
+        .pad_vssio (pad_vssio),
+        .pad_vdda  (pad_vdda),
+        .pad_vssa  (pad_vssa),
         .pad_clk   (pad_clk),
         .pad_rst   (pad_rst),
         .pad_gpio  (pad_gpio),
