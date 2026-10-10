@@ -1,5 +1,6 @@
 {
     "DESIGN_NAME": "core_pd_top",
+    "PDK": "sky130A",
 
     "VERILOG_FILES": [
         "dir::./core_pd_top.sv",
@@ -19,8 +20,22 @@
     "CLOCK_PORT": "clk",
     "CLOCK_PERIOD": 7,
 
-    "PNR_SDC_FILE": "dir::./top.con",
-    "SIGNOFF_SDC_FILE": "dir::./top.con",
+    "SYNTH_STRATEGY": "AREA 0",
+    "SYNTH_HIERARCHY_MODE": "flatten",
+    "SYNTH_SHARE_RESOURCES": true,
+    "SYNTH_ABC_BUFFERING": false,
+    "SYNTH_SIZING": false,
+    "SYNTH_ABC_DFF": false,
+    "SYNTH_DIRECT_WIRE_BUFFERING": true,
+    "SYNTH_SPLITNETS": true,
+    "SYNTH_ADDER_TYPE": "YOSYS",
+    "SYNTH_MUL_BOOTH": false,
+    "SYNTH_TIE_UNDEFINED": "low",
+    "SYNTH_WRITE_NOATTR": true,
+    "USE_LIGHTER": false,
+    "USE_SYNLIG": false,
+    "YOSYS_LOG_LEVEL": "ALL",
 
-    "AREA": 0
+    "PNR_SDC_FILE": "dir::./top.con",
+    "SIGNOFF_SDC_FILE": "dir::./top.con"
 }
