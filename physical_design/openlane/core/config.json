@@ -4,8 +4,6 @@
 
     "VERILOG_FILES": [
         "dir::./core_pd_top.sv",
-        "dir::../../../rtl/InstructionMem.sv",
-        "dir::../../../rtl/dataMem.sv",
         "dir::../../../rtl/alu.sv",
         "dir::../../../rtl/control.sv",
         "dir::../../../rtl/core.sv",
@@ -19,7 +17,6 @@
 
     "CLOCK_PORT": "clk",
     "CLOCK_PERIOD": 7,
-
 
     "SYNTH_STRATEGY": "AREA 0",
     "SYNTH_HIERARCHY_MODE": "flatten",
