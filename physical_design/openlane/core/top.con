@@ -6,23 +6,22 @@
 #   - OpenROAD pre/mid-PnR uses it through PNR_SDC_FILE.
 #   - Post-PnR STA uses it through SIGNOFF_SDC_FILE.
 #
-# Constraint policy for this standalone core stage:
-#   - Implementation clock target: 7 ns
-#   - I/O timing budget: 60% of clock period
-#   - Clock uncertainty / transition: use OpenLane/Sky130 PDK values
-#   - No arbitrary external/source clock latency at this block level
-#   - Synchronous reset driven by a weak Sky130 buffer model
-#   - Output load: use PDK-provided OUTPUT_CAP_LOAD
+# Constraint policy:
+#   - IDEC-style 7 ns implementation clock target
+#   - IDEC-style source/network clock latency assumptions
+#   - OpenLane/Sky130 uncertainty, transition, DRC limits, load, and derate
+#   - I/O max-delay budget = 60% of clock period
+#   - Synchronous reset driven by the weakest Sky130 HD buffer
 #===============================================================================
 
 #-------------------------------------------------------------------------------
-# CLOCK
+# CLOCK DEFINITION
 #-------------------------------------------------------------------------------
 set clk_period $::env(CLOCK_PERIOD)
 set half_period [expr {$clk_period / 2.0}]
 set clk_port [get_ports clk]
 
-# Match the IDEC/DC reference waveform style for a 7 ns clock: {3.5 7.0}.
+# IDEC/DC reference style: 7 ns period with a 50% duty waveform {3.5 7.0}.
 create_clock \
     -name MAIN_CLOCK \
     -period $clk_period \
@@ -31,18 +30,25 @@ create_clock \
 
 set core_clock [get_clocks MAIN_CLOCK]
 
-# Use OpenLane/Sky130 timing-environment values rather than copying
-# Caravel-specific measured clock latency/transition numbers.
-set_clock_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT) $core_clock
-set_clock_transition  $::env(CLOCK_TRANSITION_CONSTRAINT)  $core_clock
+# IDEC reference assumption:
+#   external clock source -> design clock port : max 2 ns
+#   design clock port     -> internal FF clock : max 1 ns before CTS
+#
+# Source latency remains valid after CTS because it is external to this block.
+set_clock_latency -source -max 2.0 $core_clock
 
-# Before CTS OpenROAD analyzes an ideal clock. After CTS, use the propagated
-# physical clock tree. No fixed 1 ns/2 ns latency assumption is applied here.
+# Before CTS, use the IDEC 1 ns maximum internal clock-network estimate.
+# After CTS, replace that estimate with the propagated physical clock tree.
 if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL_CLOCKS) } {
+    set_clock_latency -max 1.0 $core_clock
     unset_propagated_clock $core_clock
 } else {
     set_propagated_clock $core_clock
 }
+
+# Use the OpenLane/Sky130 timing-environment values for clock non-idealities.
+set_clock_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT) $core_clock
+set_clock_transition  $::env(CLOCK_TRANSITION_CONSTRAINT)  $core_clock
 
 #-------------------------------------------------------------------------------
 # DESIGN-RULE CONSTRAINTS
@@ -58,33 +64,34 @@ if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
 }
 
 #-------------------------------------------------------------------------------
-# INPUT ENVIRONMENT
+# INPUT TIMING / DRIVE
 #-------------------------------------------------------------------------------
 # core_pd_top has only clk and synchronous rst as primary inputs.
-# Use 60% of the clock period as the external I/O max-delay budget.
+# Reserve 60% of the clock period for external I/O delay.
+# For CLOCK_PERIOD=7 ns, io_delay_max = 4.2 ns.
 set io_delay_max [expr {$clk_period * 0.60}]
 set rst_port [get_ports rst]
 
 set_input_delay -max $io_delay_max -clock $core_clock $rst_port
 set_input_delay -min 0.0           -clock $core_clock $rst_port
 
-# Model the non-clock input as being driven by the weakest Sky130 HD buffer.
-# sky130_fd_sc_hd__buf_1 output pin is X.
+# Model the non-clock input with the weakest Sky130 HD buffer.
+# Clock quality is modeled separately with set_clock_transition above.
 set_driving_cell \
     -lib_cell sky130_fd_sc_hd__buf_1 \
     -pin X \
     $rst_port
 
 #-------------------------------------------------------------------------------
-# OUTPUT ENVIRONMENT
+# OUTPUT TIMING / LOAD
 #-------------------------------------------------------------------------------
-# Constrain standalone monitor outputs like ordinary block I/O for this run.
-# With a 7 ns clock, the 60% max-delay budget is 4.2 ns.
+# Treat the standalone monitor outputs as timed block outputs for this experiment.
+# Do not false-path them: their timing is part of the old-vs-new SDC comparison.
 set_output_delay -max $io_delay_max -clock $core_clock [all_outputs]
 set_output_delay -min 0.0           -clock $core_clock [all_outputs]
 
-# Use the Sky130/OpenLane representative output load selected by the PDK.
-# OUTPUT_CAP_LOAD is in fF; OpenSTA set_load expects pF for this library setup.
+# Use OpenLane's PDK-selected representative output load.
+# OUTPUT_CAP_LOAD is in fF; OpenSTA set_load uses pF in this library setup.
 set cap_load [expr {$::env(OUTPUT_CAP_LOAD) / 1000.0}]
 set_load $cap_load [all_outputs]
 
