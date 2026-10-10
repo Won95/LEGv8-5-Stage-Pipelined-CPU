@@ -1,4 +1,9 @@
 module soc_top (
+    `ifdef USE_POWER_PINS
+    inout wire vccd1,
+    inout wire vssd1,
+    
+    `endif
     input  wire        clk,
     input  wire        rst,
 
@@ -203,7 +208,12 @@ module soc_top (
       Port1 : CPU pipelined read
       ==============================*/
     sram_wrapper32b instruction_sram (
-        .clk        (clk),
+        `ifdef USE_POWER_PINS
+    	.vccd1(vccd1),
+    	.vssd1(vssd1),
+	
+	`endif
+	.clk        (clk),
         .rst        (rst),
 
         .prog_valid (loader_imem_valid),
@@ -280,6 +290,10 @@ module soc_top (
       DMEM backend
       ==============================*/
     sram_wrapper64b data_sram (
+   	`ifdef USE_POWER_PINS
+    	.vccd1(vccd1),
+    	.vssd1(vssd1),
+	`endif
         .clk   (clk),
         .rst   (rst),
         .addr  (dmem_slave_addr),

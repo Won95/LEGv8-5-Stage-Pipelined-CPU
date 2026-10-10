@@ -1,4 +1,9 @@
 module sram_wrapper64b (
+`ifdef USE_POWER_PINS
+    inout wire         vccd1,
+    inout wire         vssd1,
+`endif
+
     input  wire        clk,
     input  wire        rst,
 
@@ -59,7 +64,11 @@ module sram_wrapper64b (
 
     // lower 32-bit
     sky130_sram_1kbyte_1rw1r_32x256_8 SRAM_LOW (
-        .clk0   (clk),
+	`ifdef USE_POWER_PINS
+    	.vccd1(vccd1),
+    	.vssd1(vssd1),
+	`endif
+    	.clk0   (clk),
         .csb0   (csb0),
         .web0   (web0),
         .wmask0 (4'b1111),
@@ -75,7 +84,11 @@ module sram_wrapper64b (
 
     // upper 32-bit
     sky130_sram_1kbyte_1rw1r_32x256_8 SRAM_HIGH (
-        .clk0   (clk),
+        `ifdef USE_POWER_PINS
+    	.vccd1(vccd1),
+    	.vssd1(vssd1),
+	`endif
+	.clk0   (clk),
         .csb0   (csb0),
         .web0   (web0),
         .wmask0 (4'b1111),

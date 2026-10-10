@@ -1,3 +1,5 @@
 ﻿sim.out
 *.vcd
 *.fst
+
+physical_design/openlane/runs/

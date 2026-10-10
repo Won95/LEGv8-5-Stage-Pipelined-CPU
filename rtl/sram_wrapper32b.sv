@@ -1,4 +1,9 @@
 module sram_wrapper32b (
+    `ifdef USE_POWER_PINS
+    inout wire vccd1,
+    inout wire vssd1,
+    
+    `endif
     input  wire        clk,
     input  wire        rst,
 
@@ -170,7 +175,11 @@ module sram_wrapper32b (
     end
 
     sky130_sram_1kbyte_1rw1r_32x256_8 SRAM_IMEM (
-        // Port0: loader write
+	`ifdef USE_POWER_PINS
+    	.vccd1(vccd1),
+    	.vssd1(vssd1),
+	`endif
+    	// Port0: loader write
         .clk0   (clk),
         .csb0   (~prog_fire),
         .web0   (1'b0),
