@@ -1,0 +1,79 @@
+{
+    "DESIGN_NAME": "chip_top",
+
+    "VERILOG_FILES": [
+        "dir::../../../rtl/ahb_lite_fabric.sv",
+        "dir::../../../rtl/ahb_lite_master.sv",
+        "dir::../../../rtl/alu.sv",
+        "dir::../../../rtl/control.sv",
+        "dir::../../../rtl/core.sv",
+        "dir::../../../rtl/datapath.sv",
+        "dir::../../../rtl/forwarding_unit.sv",
+        "dir::../../../rtl/hazard_detection_unit.sv",
+        "dir::../../../rtl/memory_loader.sv",
+        "dir::../../../rtl/mmio_gpio.sv",
+        "dir::../../../rtl/mmio_subsystem.sv",
+        "dir::../../../rtl/mmio_uart.sv",
+        "dir::../../../rtl/program_counter.sv",
+        "dir::../../../rtl/register_file.sv",
+        "dir::../../../rtl/sign_extension.sv",
+        "dir::../../../rtl/simple_fifo.sv",
+        "dir::../../../rtl/soc_top.sv",
+        "dir::../../../rtl/sram_wrapper.sv",
+        "dir::../../../rtl/sram_wrapper32b.sv",
+        "dir::../../../rtl/io_pad_ring.sv",
+        "dir::../../../rtl/chip_top.sv"
+    ],
+
+    "EXTRA_VERILOG_MODELS": [
+        "dir::./sky130_sram_1kbyte_1rw1r_32x256_8.blackbox.v",
+        "dir::./sky130_io_macros.blackbox.v"
+    ],
+
+    "CLOCK_PORT": "pad_clk",
+    "CLOCK_NET": "clk_internal",
+    "CLOCK_PERIOD": 6,
+    "UNCERTAINTY": 0.5,
+
+    "FP_SIZING": "absolute",
+    "DIE_AREA": [0, 0, 2000, 2000],
+    "CORE_AREA": [220, 220, 1780, 1780],
+
+    "SYNTH_POWER_DEFINE": "USE_POWER_PINS",
+    "VDD_NETS": ["vccd1"],
+    "GND_NETS": ["vssd1"],
+    "FP_PDN_MULTILAYER": true,
+
+    "EXTRA_LEFS": [
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_sram_macros/lef/sky130_sram_1kbyte_1rw1r_32x256_8.lef",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/lef/sky130_ef_io.lef"
+    ],
+
+    "EXTRA_GDS_FILES": [
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_sram_macros/gds/sky130_sram_1kbyte_1rw1r_32x256_8.gds",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/gds/sky130_ef_io__gpiov2_pad.gds",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/gds/sky130_ef_io__vccd_lvc_clamped_pad.gds",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/gds/sky130_ef_io__vssd_lvc_clamped_pad.gds",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/gds/sky130_ef_io__vddio_hvc_clamped_pad.gds",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/gds/sky130_ef_io__vssio_hvc_clamped_pad.gds",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/gds/sky130_ef_io__vdda_hvc_clamped_pad.gds",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/gds/sky130_ef_io__vssa_hvc_clamped_pad.gds",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/gds/sky130_ef_io__corner_pad.gds",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/gds/sky130_ef_io__com_bus_slice_20um.gds",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/gds/sky130_ef_io__com_bus_slice_5um.gds",
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_io/gds/sky130_ef_io__connect_vcchib_vccd_and_vswitch_vddio_slice_20um.gds"
+    ],
+
+    "EXTRA_LIBS": [
+        "/home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_sram_macros/lib/sky130_sram_1kbyte_1rw1r_32x256_8_TT_1p8V_25C.lib"
+    ],
+
+    "MACRO_PLACEMENT_CFG": "dir::./macro_placement.cfg",
+
+    "MAGIC_MACRO_STD_CELL_SOURCE": "PDK",
+    "MAGIC_LEF_WRITE_USE_GDS": false,
+    "RUN_MAGIC_WRITE_LEF": true,
+    "MAGIC_DRC_USE_GDS": false,
+    "QUIT_ON_MAGIC_DRC": false,
+    "MAGIC_CAPTURE_ERRORS": false
+}
