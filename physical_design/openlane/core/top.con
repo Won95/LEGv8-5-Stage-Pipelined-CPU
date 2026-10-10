@@ -1,0 +1,100 @@
+#===============================================================================
+# core_pd_top timing constraints
+#
+# Standalone CPU-core PD stage:
+#   core + behavioral IMEM + behavioral DMEM
+#
+# This file is intentionally limited to timing/environment constraints that are
+# meaningful for OpenLane2/OpenROAD/OpenSTA.  Design Compiler-only commands from
+# the IDEC reference flow (set_max_area, set_isolate_ports,
+# set_fix_multiple_port_nets, etc.) are not copied here.
+#===============================================================================
+
+#-------------------------------------------------------------------------------
+# Clock
+#-------------------------------------------------------------------------------
+set clk_period $::env(CLOCK_PERIOD)
+set half_period [expr {$clk_period / 2.0}]
+set core_clk [get_ports clk]
+
+create_clock \
+    -name MAIN_CLOCK \
+    -period $clk_period \
+    -waveform [list 0 $half_period] \
+    $core_clk
+
+set core_clock [get_clocks MAIN_CLOCK]
+
+# Use the Sky130/OpenLane PDK constraint values supplied through the flow config.
+set_clock_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT) $core_clock
+set_clock_transition  $::env(CLOCK_TRANSITION_CONSTRAINT)  $core_clock
+
+# OpenLane uses propagated clocks for physical timing analysis unless an
+# explicitly ideal-clock analysis is requested by the flow.
+if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL_CLOCKS) } {
+    unset_propagated_clock $core_clock
+} else {
+    set_propagated_clock $core_clock
+}
+
+#-------------------------------------------------------------------------------
+# Design-rule constraints
+#-------------------------------------------------------------------------------
+set_max_fanout $::env(MAX_FANOUT_CONSTRAINT) [current_design]
+
+if { [info exists ::env(MAX_TRANSITION_CONSTRAINT)] } {
+    set_max_transition $::env(MAX_TRANSITION_CONSTRAINT) [current_design]
+}
+
+if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
+    set_max_capacitance $::env(MAX_CAPACITANCE_CONSTRAINT) [current_design]
+}
+
+#-------------------------------------------------------------------------------
+# Primary-input environment
+#-------------------------------------------------------------------------------
+# clk and rst are the only primary inputs of core_pd_top.  The clock has its own
+# clock-driver model; rst is treated as a synchronous external control input.
+set rst_port [get_ports rst]
+set input_delay_value [expr {$clk_period * $::env(IO_DELAY_CONSTRAINT) / 100.0}]
+set_input_delay $input_delay_value -clock $core_clock $rst_port
+
+# Reuse the PDK-selected Sky130 driving cells instead of hard-coding a SAED cell.
+set data_driver_spec $::env(SYNTH_DRIVING_CELL)
+set data_driver_cell [lindex [split $data_driver_spec "/"] 0]
+set data_driver_pin  [lindex [split $data_driver_spec "/"] 1]
+set_driving_cell \
+    -lib_cell $data_driver_cell \
+    -pin $data_driver_pin \
+    $rst_port
+
+if { ![info exists ::env(SYNTH_CLK_DRIVING_CELL)] } {
+    set ::env(SYNTH_CLK_DRIVING_CELL) $::env(SYNTH_DRIVING_CELL)
+}
+set clk_driver_spec $::env(SYNTH_CLK_DRIVING_CELL)
+set clk_driver_cell [lindex [split $clk_driver_spec "/"] 0]
+set clk_driver_pin  [lindex [split $clk_driver_spec "/"] 1]
+set_driving_cell \
+    -lib_cell $clk_driver_cell \
+    -pin $clk_driver_pin \
+    $core_clk
+
+#-------------------------------------------------------------------------------
+# Standalone observation outputs
+#-------------------------------------------------------------------------------
+# These monitor_* ports exist only to prevent the standalone core from becoming
+# unobservable/optimizable away.  They are not real package or SoC interface
+# timing endpoints, so they must not define the core frequency target.
+set_false_path -to [all_outputs]
+
+# Still provide a modest PDK-defined external capacitive load so the output
+# drivers are not modeled as completely unloaded.
+set cap_load [expr {$::env(OUTPUT_CAP_LOAD) / 1000.0}]
+set_load $cap_load [all_outputs]
+
+#-------------------------------------------------------------------------------
+# PVT/timing margin
+#-------------------------------------------------------------------------------
+# Match the standard OpenLane timing-derate treatment for Sky130.
+set_timing_derate -early [expr {1.0 - ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
+set_timing_derate -late  [expr {1.0 + ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
