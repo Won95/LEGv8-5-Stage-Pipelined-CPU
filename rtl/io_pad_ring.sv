@@ -1,7 +1,6 @@
 module io_pad_ring (
 `ifdef USE_POWER_PINS
-    // Core / I/O power-domain rails.  The signal pads use the Sky130 I/O
-    // supply network, while VCCD/VSSD are tied to the 1.8-V core domain.
+    // Internal core / I/O power-domain rails.
     inout wire        vccd1,
     inout wire        vssd1,
     inout wire        vddio,
@@ -14,7 +13,15 @@ module io_pad_ring (
     inout wire        vssio_q,
 `endif
 
-    // Physical package-facing pads.
+    // Physical package-facing power pads.
+    inout wire        pad_vccd,
+    inout wire        pad_vssd,
+    inout wire        pad_vddio,
+    inout wire        pad_vssio,
+    inout wire        pad_vdda,
+    inout wire        pad_vssa,
+
+    // Physical package-facing signal pads.
     inout wire        pad_clk,
     inout wire        pad_rst,
     inout wire [15:0] pad_gpio,
@@ -31,6 +38,117 @@ module io_pad_ring (
     // pad macros share them physically around the I/O ring.
     wire amuxbus_a;
     wire amuxbus_b;
+
+`ifdef USE_POWER_PINS
+    /*======================================================================
+      Package power / ground pads
+
+      The clamped pads provide the package-facing bond pads and the padframe
+      ESD structures.  The logical rails remain explicit because OpenLane PDN
+      and the SRAM macros currently use vccd1/vssd1 directly.
+
+      Padframe physical integration must additionally include the Sky130
+      connect/filler slices so the abutment rails are continuous around the
+      ring.  In particular, the physical connect slice joins VCCHIB<->VCCD
+      and VSWITCH<->VDDIO.
+      ======================================================================*/
+
+    sky130_ef_io__vccd_lvc_clamped_pad u_vccd_pad (
+        .AMUXBUS_A (amuxbus_a),
+        .AMUXBUS_B (amuxbus_b),
+        .VSSA      (vssa),
+        .VDDA      (vdda),
+        .VSWITCH   (vswitch),
+        .VDDIO_Q   (vddio_q),
+        .VCCHIB    (vcchib),
+        .VDDIO     (vddio),
+        .VCCD      (vccd1),
+        .VCCD_PAD  (pad_vccd),
+        .VSSIO     (vssio),
+        .VSSD      (vssd1),
+        .VSSIO_Q   (vssio_q)
+    );
+
+    sky130_ef_io__vssd_lvc_clamped_pad u_vssd_pad (
+        .AMUXBUS_A (amuxbus_a),
+        .AMUXBUS_B (amuxbus_b),
+        .VSSA      (vssa),
+        .VDDA      (vdda),
+        .VSWITCH   (vswitch),
+        .VDDIO_Q   (vddio_q),
+        .VCCHIB    (vcchib),
+        .VDDIO     (vddio),
+        .VCCD      (vccd1),
+        .VSSIO     (vssio),
+        .VSSD      (vssd1),
+        .VSSD_PAD  (pad_vssd),
+        .VSSIO_Q   (vssio_q)
+    );
+
+    sky130_ef_io__vddio_hvc_clamped_pad u_vddio_pad (
+        .AMUXBUS_A (amuxbus_a),
+        .AMUXBUS_B (amuxbus_b),
+        .VSSA      (vssa),
+        .VDDA      (vdda),
+        .VSWITCH   (vswitch),
+        .VDDIO_Q   (vddio_q),
+        .VCCHIB    (vcchib),
+        .VDDIO     (vddio),
+        .VDDIO_PAD (pad_vddio),
+        .VCCD      (vccd1),
+        .VSSIO     (vssio),
+        .VSSD      (vssd1),
+        .VSSIO_Q   (vssio_q)
+    );
+
+    sky130_ef_io__vssio_hvc_clamped_pad u_vssio_pad (
+        .AMUXBUS_A (amuxbus_a),
+        .AMUXBUS_B (amuxbus_b),
+        .VSSA      (vssa),
+        .VDDA      (vdda),
+        .VSWITCH   (vswitch),
+        .VDDIO_Q   (vddio_q),
+        .VCCHIB    (vcchib),
+        .VDDIO     (vddio),
+        .VCCD      (vccd1),
+        .VSSIO     (vssio),
+        .VSSIO_PAD (pad_vssio),
+        .VSSD      (vssd1),
+        .VSSIO_Q   (vssio_q)
+    );
+
+    sky130_ef_io__vdda_hvc_clamped_pad u_vdda_pad (
+        .AMUXBUS_A (amuxbus_a),
+        .AMUXBUS_B (amuxbus_b),
+        .VSSA      (vssa),
+        .VDDA      (vdda),
+        .VDDA_PAD  (pad_vdda),
+        .VSWITCH   (vswitch),
+        .VDDIO_Q   (vddio_q),
+        .VCCHIB    (vcchib),
+        .VDDIO     (vddio),
+        .VCCD      (vccd1),
+        .VSSIO     (vssio),
+        .VSSD      (vssd1),
+        .VSSIO_Q   (vssio_q)
+    );
+
+    sky130_ef_io__vssa_hvc_clamped_pad u_vssa_pad (
+        .AMUXBUS_A (amuxbus_a),
+        .AMUXBUS_B (amuxbus_b),
+        .VSSA      (vssa),
+        .VSSA_PAD  (pad_vssa),
+        .VDDA      (vdda),
+        .VSWITCH   (vswitch),
+        .VDDIO_Q   (vddio_q),
+        .VCCHIB    (vcchib),
+        .VDDIO     (vddio),
+        .VCCD      (vccd1),
+        .VSSIO     (vssio),
+        .VSSD      (vssd1),
+        .VSSIO_Q   (vssio_q)
+    );
+`endif
 
     /*======================================================================
       Clock input pad
