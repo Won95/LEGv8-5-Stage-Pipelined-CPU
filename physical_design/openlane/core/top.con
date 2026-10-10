@@ -6,8 +6,13 @@
 #   - OpenROAD pre/mid-PnR uses it through PNR_SDC_FILE.
 #   - Post-PnR STA uses it through SIGNOFF_SDC_FILE.
 #
-# Base behavior follows OpenLane2 base.sdc, with IDEC-specific clock latency
-# assumptions added for this standalone core implementation stage.
+# Constraint policy for this standalone core stage:
+#   - Implementation clock target: 7 ns
+#   - I/O timing budget: 60% of clock period
+#   - Clock uncertainty / transition: use OpenLane/Sky130 PDK values
+#   - No arbitrary external/source clock latency at this block level
+#   - Synchronous reset driven by a weak Sky130 buffer model
+#   - Output load: use PDK-provided OUTPUT_CAP_LOAD
 #===============================================================================
 
 #-------------------------------------------------------------------------------
@@ -17,7 +22,7 @@ set clk_period $::env(CLOCK_PERIOD)
 set half_period [expr {$clk_period / 2.0}]
 set clk_port [get_ports clk]
 
-# Match the IDEC/DC reference waveform for a 7 ns clock: {3.5 7.0}.
+# Match the IDEC/DC reference waveform style for a 7 ns clock: {3.5 7.0}.
 create_clock \
     -name MAIN_CLOCK \
     -period $clk_period \
@@ -26,20 +31,18 @@ create_clock \
 
 set core_clock [get_clocks MAIN_CLOCK]
 
-# External source latency from the IDEC reference.
-set_clock_latency -source 2.0 $core_clock
+# Use OpenLane/Sky130 timing-environment values rather than copying
+# Caravel-specific measured clock latency/transition numbers.
+set_clock_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT) $core_clock
+set_clock_transition  $::env(CLOCK_TRANSITION_CONSTRAINT)  $core_clock
 
-# Pre-CTS estimated internal clock-network latency from the IDEC reference.
-# After CTS/OpenROAD propagated-clock analysis, use the physical clock tree.
+# Before CTS OpenROAD analyzes an ideal clock. After CTS, use the propagated
+# physical clock tree. No fixed 1 ns/2 ns latency assumption is applied here.
 if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL_CLOCKS) } {
-    set_clock_latency 1.0 $core_clock
     unset_propagated_clock $core_clock
 } else {
     set_propagated_clock $core_clock
 }
-
-set_clock_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT) $core_clock
-set_clock_transition  $::env(CLOCK_TRANSITION_CONSTRAINT)  $core_clock
 
 #-------------------------------------------------------------------------------
 # DESIGN-RULE CONSTRAINTS
@@ -58,41 +61,38 @@ if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
 # INPUT ENVIRONMENT
 #-------------------------------------------------------------------------------
 # core_pd_top has only clk and synchronous rst as primary inputs.
+# Use 60% of the clock period as the external I/O max-delay budget.
+set io_delay_max [expr {$clk_period * 0.60}]
 set rst_port [get_ports rst]
-set input_delay_value [expr {$clk_period * $::env(IO_DELAY_CONSTRAINT) / 100.0}]
-set_input_delay $input_delay_value -clock $core_clock $rst_port
 
-# Follow OpenLane base.sdc for external-drive modeling.
-set synth_drive_cell [split $::env(SYNTH_DRIVING_CELL) "/"]
+set_input_delay -max $io_delay_max -clock $core_clock $rst_port
+set_input_delay -min 0.0           -clock $core_clock $rst_port
+
+# Model the non-clock input as being driven by the weakest Sky130 HD buffer.
+# sky130_fd_sc_hd__buf_1 output pin is X.
 set_driving_cell \
-    -lib_cell [lindex $synth_drive_cell 0] \
-    -pin [lindex $synth_drive_cell 1] \
+    -lib_cell sky130_fd_sc_hd__buf_1 \
+    -pin X \
     $rst_port
-
-if { ![info exists ::env(SYNTH_CLK_DRIVING_CELL)] } {
-    set ::env(SYNTH_CLK_DRIVING_CELL) $::env(SYNTH_DRIVING_CELL)
-}
-set synth_clk_drive_cell [split $::env(SYNTH_CLK_DRIVING_CELL) "/"]
-set_driving_cell \
-    -lib_cell [lindex $synth_clk_drive_cell 0] \
-    -pin [lindex $synth_clk_drive_cell 1] \
-    $clk_port
 
 #-------------------------------------------------------------------------------
 # OUTPUT ENVIRONMENT
 #-------------------------------------------------------------------------------
+# Constrain standalone monitor outputs like ordinary block I/O for this run.
+# With a 7 ns clock, the 60% max-delay budget is 4.2 ns.
+set_output_delay -max $io_delay_max -clock $core_clock [all_outputs]
+set_output_delay -min 0.0           -clock $core_clock [all_outputs]
+
+# Use the Sky130/OpenLane representative output load selected by the PDK.
+# OUTPUT_CAP_LOAD is in fF; OpenSTA set_load expects pF for this library setup.
 set cap_load [expr {$::env(OUTPUT_CAP_LOAD) / 1000.0}]
 set_load $cap_load [all_outputs]
-
-# monitor_* outputs are observability-only ports for the standalone core PD run.
-# They are not architectural timing endpoints.
-set_false_path -to [all_outputs]
 
 #-------------------------------------------------------------------------------
 # PVT / DERATE
 #-------------------------------------------------------------------------------
-# Sky130 PVT corners are selected by OpenLane/PDK. Apply the standard OpenLane
-# timing derate on top of the selected corner.
+# PVT corners are selected by OpenLane/PDK. Apply the standard OpenLane timing
+# derate on top of the selected corner.
 set_timing_derate -early [expr {1.0 - ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
 set_timing_derate -late  [expr {1.0 + ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
 
