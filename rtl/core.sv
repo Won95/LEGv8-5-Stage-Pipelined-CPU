@@ -25,16 +25,19 @@ module core(
     input  wire [63:0] dmem_rdata
 );
 
-    // ctrl nets
+    // ID-stage decode nets
     wire [31:0] instruction_id;
-    wire Reg2Loc_id, Unconditionbranch_id, Branch_id, Memread_id, MemtoReg_id, Memwrite_id, ALUSrc_id, Regwrite_id;
+    wire Reg2Loc_id, Unconditionbranch_id, Branch_id;
+    wire Memread_id, MemtoReg_id, Memwrite_id, ALUSrc_id, Regwrite_id;
+    wire UseRn_id, UseRm_id;
     wire [3:0] ALUop_id;
 
-    // hazard nets
+    // Hazard / pipeline metadata
     wire [4:0] Rd_ex, Rd_mem, Rn_id, Rm_id;
-    wire Memread_ex, Regwrite_ex, MemtoReg_mem, hazardmux_id, idhold_id, pchold_id;
+    wire Memread_ex, Regwrite_ex, MemtoReg_mem;
+    wire hazardmux_id, idhold_id, pchold_id;
 
-    // fwd nets
+    // Forwarding metadata
     wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
     wire [4:0] Rm_ex, Rn_ex, Rd_wb;
     wire Regwrite_mem, Regwrite_wb;
@@ -88,8 +91,7 @@ module core(
         .Regwrite_wb(Regwrite_wb)
     );
 
-    (* KEEP_HIERARCHY="yes" *)
-    Control ctrl(
+    Control ctrl (
         .instruction(instruction_id),
         .Reg2Loc(Reg2Loc_id),
         .Unconditionbranch(Unconditionbranch_id),
@@ -99,31 +101,30 @@ module core(
         .ALUop(ALUop_id),
         .Memwrite(Memwrite_id),
         .ALUSrc(ALUSrc_id),
-        .Regwrite(Regwrite_id)
+        .Regwrite(Regwrite_id),
+        .UseRn(UseRn_id),
+        .UseRm(UseRm_id)
     );
 
-    (* KEEP_HIERARCHY="yes" *)
-    hazarddetectionunit hazard(
+    hazarddetectionunit hazard (
         .Rd_ex(Rd_ex),
         .Memread_ex(Memread_ex),
-        .Regwrite_ex(Regwrite_ex),
-        .Rd_mem(Rd_mem),
-        .MemtoReg_mem(MemtoReg_mem),
         .Rn_id(Rn_id),
         .Rm_id(Rm_id),
-        .Branch_id(Branch_id),
+        .UseRn_id(UseRn_id),
+        .UseRm_id(UseRm_id),
         .hazardmux_id(hazardmux_id),
         .idhold(idhold_id),
         .pchold(pchold_id)
     );
 
-    (* KEEP_HIERARCHY="yes" *)
-    forwardingunit fwd(
+    forwardingunit fwd (
         .Rm_ex(Rm_ex),
         .Rn_ex(Rn_ex),
         .Rd_mem(Rd_mem),
         .Rd_wb(Rd_wb),
         .Regwrite_mem(Regwrite_mem),
+        .MemtoReg_mem(MemtoReg_mem),
         .Regwrite_wb(Regwrite_wb),
         .muxa(fwdmuxa_ex),
         .muxb(fwdmuxb_ex)
