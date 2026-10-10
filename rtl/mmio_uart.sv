@@ -9,24 +9,19 @@ module mmio_uart (
     output wire        ready,
     output reg  [63:0] rdata,
 
-    // External RX byte stream -> RX FIFO
     input  wire        rx_valid,
     input  wire [7:0]  rx_data,
     output wire        rx_ready,
 
-    // TX FIFO -> external TX byte stream
     output wire        tx_valid,
     output wire [7:0]  tx_data,
     input  wire        tx_ready
 );
 
-    localparam [63:0] UART_RXDATA_ADDR = 64'h0000_0000_0000_0120;
-    localparam [63:0] UART_TXDATA_ADDR = 64'h0000_0000_0000_0128;
-    localparam [63:0] UART_STATUS_ADDR = 64'h0000_0000_0000_0130;
+    localparam [7:0] UART_RXDATA_OFF = 8'h20;
+    localparam [7:0] UART_TXDATA_OFF = 8'h28;
+    localparam [7:0] UART_STATUS_OFF = 8'h30;
 
-    /*==============================
-      RX FIFO
-      ==============================*/
     wire       rx_fifo_valid;
     wire [7:0] rx_fifo_data;
     wire       rx_fifo_pop;
@@ -45,11 +40,8 @@ module mmio_uart (
         .rd_ready (rx_fifo_pop)
     );
 
-    /*==============================
-      TX FIFO
-      ==============================*/
-    wire       tx_fifo_wr_ready;
-    wire       tx_fifo_push;
+    wire tx_fifo_wr_ready;
+    wire tx_fifo_push;
 
     simple_fifo #(
         .WIDTH(8),
@@ -68,12 +60,9 @@ module mmio_uart (
     wire access_rxdata;
     wire access_txdata;
 
-    assign access_rxdata = valid && !write && (addr == UART_RXDATA_ADDR);
-    assign access_txdata = valid &&  write && (addr == UART_TXDATA_ADDR);
+    assign access_rxdata = valid && !write && (addr[7:0] == UART_RXDATA_OFF);
+    assign access_txdata = valid &&  write && (addr[7:0] == UART_TXDATA_OFF);
 
-    // RXDATA read blocks while the RX FIFO is empty.
-    // TXDATA write blocks while the TX FIFO is full.
-    // STATUS and unsupported UART-register accesses complete immediately.
     assign ready = access_rxdata ? rx_fifo_valid :
                    access_txdata ? tx_fifo_wr_ready :
                                    valid;
@@ -81,11 +70,11 @@ module mmio_uart (
     assign rx_fifo_pop  = access_rxdata && ready;
     assign tx_fifo_push = access_txdata && ready;
 
-    always @(*) begin
-        case (addr)
-            UART_RXDATA_ADDR: rdata = {56'd0, rx_fifo_data};
-            UART_STATUS_ADDR: rdata = {62'd0, tx_fifo_wr_ready, rx_fifo_valid};
-            default         : rdata = 64'd0;
+    always_comb begin
+        case (addr[7:0])
+            UART_RXDATA_OFF: rdata = {56'd0, rx_fifo_data};
+            UART_STATUS_OFF: rdata = {62'd0, tx_fifo_wr_ready, rx_fifo_valid};
+            default        : rdata = 64'd0;
         endcase
     end
 
