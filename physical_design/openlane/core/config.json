@@ -17,8 +17,7 @@
     ],
 
     "CLOCK_PORT": "clk",
-    "CLOCK_PERIOD": 6,
-    "CLOCK_UNCERTAINTY_CONSTRAINT": 0.5,
+    "CLOCK_PERIOD": 7,
 
     "PNR_SDC_FILE": "dir::./top.con",
     "SIGNOFF_SDC_FILE": "dir::./top.con",
