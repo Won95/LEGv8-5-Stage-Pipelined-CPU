@@ -1,53 +1,36 @@
 #===============================================================================
 # core_pd_top PnR / STA constraints
 #
-# Standalone CPU-core PD stage:
-#   core + behavioral IMEM + behavioral DMEM
+# OpenLane2 usage:
+#   - Yosys.Synthesis does NOT source this file.
+#   - OpenROAD pre/mid-PnR uses it through PNR_SDC_FILE.
+#   - Post-PnR STA uses it through SIGNOFF_SDC_FILE.
 #
-# IMPORTANT OPENLANE2 SCOPE
-# -------------------------
-# This file is NOT read by Yosys.Synthesis.
-# It is consumed by OpenROAD through PNR_SDC_FILE / SIGNOFF_SDC_FILE after
-# synthesis.  Yosys/ABC synthesis gets its timing target separately from
-# config.json (primarily CLOCK_PERIOD) and OpenLane generates its own
-# synthesis.abc.sdc containing the supported ABC environment constraints.
-#
-# The structure below follows the timing intent of the IDEC/DC reference
-# constraint, but maps that intent to OpenROAD/OpenSTA for the PD/STA stages.
+# Base behavior follows OpenLane2 base.sdc, with IDEC-specific clock latency
+# assumptions added for this standalone core implementation stage.
 #===============================================================================
 
 #-------------------------------------------------------------------------------
-# CLOCK DEFINITION -- OpenROAD / OpenSTA
+# CLOCK
 #-------------------------------------------------------------------------------
-# Functional target: 100 MHz -> 10 ns.
-# For this implementation stage we intentionally tighten the target to 7 ns
-# (about 142.9 MHz), matching the IDEC reference style of over-constraining PnR.
-#
-# NOTE: config.json CLOCK_PERIOD=7 is also used independently by Yosys/ABC
-# synthesis as its delay target.  The create_clock command below is for
-# OpenROAD/OpenSTA; synthesis does not source this file.
 set clk_period $::env(CLOCK_PERIOD)
 set half_period [expr {$clk_period / 2.0}]
-set core_clk [get_ports clk]
+set clk_port [get_ports clk]
 
-# IDEC used waveform {3.5 7} for a 7 ns period.  For a single master clock the
-# absolute phase origin is arbitrary, so use an equivalent 50% duty waveform
-# starting at t=0.
+# Match the IDEC/DC reference waveform for a 7 ns clock: {3.5 7.0}.
 create_clock \
     -name MAIN_CLOCK \
     -period $clk_period \
-    -waveform [list 0 $half_period] \
-    $core_clk
+    -waveform [list $half_period $clk_period] \
+    $clk_port
 
 set core_clock [get_clocks MAIN_CLOCK]
 
-# External clock-source latency from the IDEC reference: 2 ns.
-# This models delay before the clock reaches the design boundary.
+# External source latency from the IDEC reference.
 set_clock_latency -source 2.0 $core_clock
 
-# Estimated internal clock-network insertion delay from the IDEC reference: 1 ns.
-# Apply it only while OpenROAD is analyzing an ideal clock (pre-PnR/pre-CTS).
-# After CTS, use the propagated physical clock tree instead of a fixed estimate.
+# Pre-CTS estimated internal clock-network latency from the IDEC reference.
+# After CTS/OpenROAD propagated-clock analysis, use the physical clock tree.
 if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL_CLOCKS) } {
     set_clock_latency 1.0 $core_clock
     unset_propagated_clock $core_clock
@@ -55,12 +38,11 @@ if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL
     set_propagated_clock $core_clock
 }
 
-# Sky130/OpenLane timing margins for OpenSTA analysis.
 set_clock_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT) $core_clock
 set_clock_transition  $::env(CLOCK_TRANSITION_CONSTRAINT)  $core_clock
 
 #-------------------------------------------------------------------------------
-# DESIGN-RULE CONSTRAINTS -- OpenROAD / OpenSTA
+# DESIGN-RULE CONSTRAINTS
 #-------------------------------------------------------------------------------
 set_max_fanout $::env(MAX_FANOUT_CONSTRAINT) [current_design]
 
@@ -73,53 +55,45 @@ if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
 }
 
 #-------------------------------------------------------------------------------
-# ENVIRONMENTAL ATTRIBUTES -- OpenROAD / OpenSTA
+# INPUT ENVIRONMENT
 #-------------------------------------------------------------------------------
-# core_pd_top has only clk and rst as primary inputs.  There are no ordinary
-# external data inputs at this stage.
-#
-# rst in this RTL is synchronous.  Give it an input-arrival constraint rather
-# than treating it as an asynchronous ideal reset network.
+# core_pd_top has only clk and synchronous rst as primary inputs.
 set rst_port [get_ports rst]
 set input_delay_value [expr {$clk_period * $::env(IO_DELAY_CONSTRAINT) / 100.0}]
 set_input_delay $input_delay_value -clock $core_clock $rst_port
 
-# IDEC reference modeled output loading with a library input pin.  In OpenLane
-# use the Sky130 PDK-selected OUTPUT_CAP_LOAD instead of a SAED32 cell.
+# Follow OpenLane base.sdc for external-drive modeling.
+set synth_drive_cell [split $::env(SYNTH_DRIVING_CELL) "/"]
+set_driving_cell \
+    -lib_cell [lindex $synth_drive_cell 0] \
+    -pin [lindex $synth_drive_cell 1] \
+    $rst_port
+
+if { ![info exists ::env(SYNTH_CLK_DRIVING_CELL)] } {
+    set ::env(SYNTH_CLK_DRIVING_CELL) $::env(SYNTH_DRIVING_CELL)
+}
+set synth_clk_drive_cell [split $::env(SYNTH_CLK_DRIVING_CELL) "/"]
+set_driving_cell \
+    -lib_cell [lindex $synth_clk_drive_cell 0] \
+    -pin [lindex $synth_clk_drive_cell 1] \
+    $clk_port
+
+#-------------------------------------------------------------------------------
+# OUTPUT ENVIRONMENT
+#-------------------------------------------------------------------------------
 set cap_load [expr {$::env(OUTPUT_CAP_LOAD) / 1000.0}]
 set_load $cap_load [all_outputs]
 
-# These monitor_* outputs exist only so standalone core logic remains observable
-# after synthesis.  They are not architectural chip/SoC interfaces, so they do
-# not define the CPU clock-frequency target.
+# monitor_* outputs are observability-only ports for the standalone core PD run.
+# They are not architectural timing endpoints.
 set_false_path -to [all_outputs]
 
 #-------------------------------------------------------------------------------
-# OPERATING CONDITIONS / PVT -- OpenROAD / OpenSTA
+# PVT / DERATE
 #-------------------------------------------------------------------------------
-# IDEC/DC selected explicit SAED max/min operating conditions.  OpenLane2 uses
-# Sky130 PDK timing corners / MCMM instead, so do not copy SAED operating names.
+# Sky130 PVT corners are selected by OpenLane/PDK. Apply the standard OpenLane
+# timing derate on top of the selected corner.
 set_timing_derate -early [expr {1.0 - ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
 set_timing_derate -late  [expr {1.0 + ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
 
-#-------------------------------------------------------------------------------
-# WHAT YOSYS/ABC SYNTHESIS ACTUALLY SEES IN STOCK OPENLANE2
-#-------------------------------------------------------------------------------
-# * CLOCK_PERIOD from config.json -> ABC -D delay target (ns converted to ps)
-# * SYNTH_DRIVING_CELL            -> generated synthesis.abc.sdc
-# * OUTPUT_CAP_LOAD               -> generated synthesis.abc.sdc
-# * MAX_FANOUT_CONSTRAINT and selected ABC options -> generated ABC script
-# * selected synthesis strategy / buffering / sizing options from config.json
-#
-# Stock OpenLane2 currently has no active SYNTH_SDC_FILE hook in Yosys.Synthesis;
-# that variable exists only as commented-out code upstream.  Therefore commands
-# such as set_clock_latency and set_clock_uncertainty in this file do NOT affect
-# Yosys technology mapping.  They constrain OpenROAD/OpenSTA after synthesis.
-#
-# DC-specific synthesis/session commands from the IDEC file are therefore not
-# copied here:
-#   reset_design
-#   set_max_area 0
-#   set_isolate_ports [all_outputs]
-#   set_fix_multiple_port_nets ...
 #===============================================================================
