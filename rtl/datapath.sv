@@ -138,6 +138,9 @@ module datapath(
     wire [63:0] Readdata2_ex_mux;
     wire [63:0] Readdata2_ex_Src;
     wire branch_zero_ex;
+    wire branch_zero_reg_ex;
+    wire branch_zero_mem_ex;
+    wire branch_zero_wb_ex;
 
     assign Readdata1_ex_mux =
         (muxa == 2'b10) ? result_mem :
@@ -151,9 +154,20 @@ module datapath(
 
     assign Readdata2_ex_Src = ALUSrc_ex ? SE_Dtaddr_ex : Readdata2_ex_mux;
 
-    // CBZ uses the same forwarded EX operand path as ordinary ALU consumers.
+    // For CBZ, reduce each possible forwarded source to a one-bit zero flag in
+    // parallel, then select between the flags.  This is logically equivalent to
+    // muxing 64-bit data first and then performing a 64-bit zero comparison, but
+    // it removes the wide forwarding mux from the branch redirect timing path.
+    assign branch_zero_reg_ex = ~|Readdata2_ex;
+    assign branch_zero_mem_ex = ~|result_mem;
+    assign branch_zero_wb_ex  = ~|Regwritedata_wb;
+
+    assign branch_zero_ex =
+        (muxb == 2'b10) ? branch_zero_mem_ex :
+        (muxb == 2'b01) ? branch_zero_wb_ex  :
+                          branch_zero_reg_ex;
+
     // An older MEM stall must complete before a branch is allowed to redirect.
-    assign branch_zero_ex      = (Readdata2_ex_mux == 64'd0);
     assign branch_taken_ex_raw = Unconditionbranch_ex | (Branch_ex && branch_zero_ex);
     assign branch_taken_ex     = !mem_wait && branch_taken_ex_raw;
 
