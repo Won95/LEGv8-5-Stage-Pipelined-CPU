@@ -1,0 +1,113 @@
+#===============================================================================
+# soc_top PnR / STA constraints
+#
+# Based on the core OpenLane constraint policy, adapted for the SoC top-level
+# functional I/O ports and SRAM-macro integration.
+#===============================================================================
+
+#-------------------------------------------------------------------------------
+# CLOCK DEFINITION
+#-------------------------------------------------------------------------------
+set clk_period $::env(CLOCK_PERIOD)
+set half_period [expr {$clk_period / 2.0}]
+set clk_port [get_ports clk]
+
+create_clock \
+    -name MAIN_CLOCK \
+    -period $clk_period \
+    -waveform [list $half_period $clk_period] \
+    $clk_port
+
+set core_clock [get_clocks MAIN_CLOCK]
+
+# Treat the IDEC-style pre-CTS latency assumptions as common-mode latency so
+# launch and capture edges are shifted equally.
+set_clock_latency -source -min 2.0 $core_clock
+set_clock_latency -source -max 2.0 $core_clock
+
+if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL_CLOCKS) } {
+    set_clock_latency -min 1.0 $core_clock
+    set_clock_latency -max 1.0 $core_clock
+    unset_propagated_clock $core_clock
+} else {
+    set_propagated_clock $core_clock
+}
+
+set_clock_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT) $core_clock
+set_clock_transition  $::env(CLOCK_TRANSITION_CONSTRAINT)  $core_clock
+
+#-------------------------------------------------------------------------------
+# DESIGN-RULE CONSTRAINTS
+#-------------------------------------------------------------------------------
+set_max_fanout $::env(MAX_FANOUT_CONSTRAINT) [current_design]
+
+if { [info exists ::env(MAX_TRANSITION_CONSTRAINT)] } {
+    set_max_transition $::env(MAX_TRANSITION_CONSTRAINT) [current_design]
+}
+
+if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
+    set_max_capacitance $::env(MAX_CAPACITANCE_CONSTRAINT) [current_design]
+}
+
+#-------------------------------------------------------------------------------
+# I/O TIMING BUDGET
+#-------------------------------------------------------------------------------
+# Keep the same first-pass budget used for core so the SoC run is comparable.
+# These values are provisional and should be retuned from measured STA paths.
+set input_internal_tmax  6.0
+set output_internal_tmax 6.0
+set setup_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT)
+
+set input_delay_max  [expr {$clk_period - $setup_uncertainty - $input_internal_tmax}]
+set output_delay_max [expr {$clk_period - $setup_uncertainty - $output_internal_tmax}]
+
+puts "\[INFO\] Input internal Tmax : $input_internal_tmax ns"
+puts "\[INFO\] Output internal Tmax: $output_internal_tmax ns"
+puts "\[INFO\] Input max delay     : $input_delay_max ns"
+puts "\[INFO\] Output max delay    : $output_delay_max ns"
+
+#-------------------------------------------------------------------------------
+# FUNCTIONAL INPUT TIMING / DRIVE
+#-------------------------------------------------------------------------------
+# Exclude clk and the vccd1/vssd1 power pins. All remaining top-level inputs are
+# treated as synchronous to MAIN_CLOCK for this baseline SoC timing experiment.
+set functional_inputs [get_ports {
+    rst
+    ext_valid ext_target ext_last ext_addr* ext_wdata*
+    gpio_in*
+    uart_rx_valid uart_rx_data*
+    uart_tx_ready
+}]
+
+set_input_delay -max $input_delay_max -clock $core_clock $functional_inputs
+set_input_delay -min 0.0              -clock $core_clock $functional_inputs
+
+set_driving_cell \
+    -lib_cell sky130_fd_sc_hd__buf_1 \
+    -pin X \
+    $functional_inputs
+
+#-------------------------------------------------------------------------------
+# FUNCTIONAL OUTPUT TIMING / LOAD
+#-------------------------------------------------------------------------------
+set functional_outputs [get_ports {
+    ext_ready
+    gpio_out* gpio_oe*
+    uart_rx_ready
+    uart_tx_valid uart_tx_data*
+    load_done
+}]
+
+set_output_delay -max $output_delay_max -clock $core_clock $functional_outputs
+set_output_delay -min 0.0               -clock $core_clock $functional_outputs
+
+set cap_load [expr {$::env(OUTPUT_CAP_LOAD) / 1000.0}]
+set_load $cap_load $functional_outputs
+
+#-------------------------------------------------------------------------------
+# PVT / DERATE
+#-------------------------------------------------------------------------------
+set_timing_derate -early [expr {1.0 - ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
+set_timing_derate -late  [expr {1.0 + ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
+
+#===============================================================================
