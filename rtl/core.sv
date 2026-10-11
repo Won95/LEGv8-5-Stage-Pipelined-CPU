@@ -32,15 +32,16 @@ module core(
     wire UseRn_id, UseRm_id;
     wire [3:0] ALUop_id;
 
-    // Hazard / pipeline metadata
-    wire [4:0] Rd_ex, Rd_mem, Rn_id, Rm_id, Rd_wb;
-    wire Memread_ex, Regwrite_ex;
-    wire hazardmux_id, idhold_id, pchold_id;
+    // Hazard / pipeline metadata.  Several names remain visible here because
+    // the existing directed testbenches inspect them hierarchically.
+    wire [4:0] Rd_ex, Rd_mem, Rd_wb, Rn_id, Rm_id;
+    wire [4:0] Rm_ex, Rn_ex;
+    wire Memread_ex, Regwrite_ex, MemtoReg_mem;
     wire Regwrite_mem, Regwrite_wb;
+    wire hazardmux_id, idhold_id, pchold_id;
 
-    // Forwarding decisions are computed while the consumer is still in ID,
-    // then registered into ID/EX.  This removes destination compares and
-    // priority logic from the EX -> ALU critical path.
+    // Forwarding decisions are computed in ID for the cycle in which the
+    // consumer will reach EX, then registered into ID/EX.
     wire [1:0] fwdmuxa_id, fwdmuxb_id;
     wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
 
@@ -83,9 +84,12 @@ module core(
         .instruction_id(instruction_id),
         .Rd_ex(Rd_ex),
         .Rd_mem(Rd_mem),
-        .Rd_wb(Rd_wb),
         .Memread_ex(Memread_ex),
         .Regwrite_ex(Regwrite_ex),
+        .MemtoReg_mem(MemtoReg_mem),
+        .Rm_ex(Rm_ex),
+        .Rn_ex(Rn_ex),
+        .Rd_wb(Rd_wb),
         .Regwrite_mem(Regwrite_mem),
         .Regwrite_wb(Regwrite_wb),
         .fwdmuxa_ex(fwdmuxa_ex),
