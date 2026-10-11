@@ -71,12 +71,17 @@ puts "\[INFO\] Output max delay    : $output_delay_max ns"
 #-------------------------------------------------------------------------------
 # INPUT TIMING / DRIVE
 #-------------------------------------------------------------------------------
-# All non-clock inputs are synchronous core-boundary signals:
-#   rst,
-#   imem_req_ready,
-#   imem_rsp_valid/imem_rsp_addr/imem_rsp_data,
-#   dmem_ready/dmem_rdata.
-set non_clock_inputs [remove_from_collection [all_inputs] $clk_port]
+# OpenSTA does not implement Synopsys remove_from_collection.  Enumerate the
+# synchronous non-clock core-boundary inputs explicitly instead.
+set non_clock_inputs [get_ports {
+    rst
+    imem_req_ready
+    imem_rsp_valid
+    imem_rsp_addr*
+    imem_rsp_data*
+    dmem_ready
+    dmem_rdata*
+}]
 
 set_input_delay -max $input_delay_max -clock $core_clock $non_clock_inputs
 set_input_delay -min 0.0              -clock $core_clock $non_clock_inputs
