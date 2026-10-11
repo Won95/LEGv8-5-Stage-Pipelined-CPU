@@ -3,8 +3,10 @@
 #
 # Core-only block timing model:
 #   - Instruction/data memories are outside core_pd_top.
-#   - Their synchronous interface timing is represented with primary-I/O delays.
-#   - Full memory/macro timing is analyzed separately at soc_top level.
+#   - Their setup-side interface timing is represented with primary-I/O delays.
+#   - I/O hold timing is intentionally not constrained here because the external
+#     memory/macros and their min-delay requirements are not part of this block.
+#   - Full memory/macro setup/hold timing is analyzed separately at soc_top level.
 #===============================================================================
 
 #-------------------------------------------------------------------------------
@@ -53,9 +55,9 @@ if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
 #-------------------------------------------------------------------------------
 # BLOCK I/O TIMING BUDGET
 #-------------------------------------------------------------------------------
-# Reserve 6.0 ns for the core-internal portion of each synchronous I/O path.
+# Reserve 6.0 ns for the core-internal portion of each synchronous I/O setup path.
 # With a 7 ns clock and 0.25 ns setup uncertainty this gives 0.75 ns of
-# external-interface budget at each block boundary.
+# external-interface setup budget at each block boundary.
 set input_internal_tmax  6.0
 set output_internal_tmax 6.0
 set setup_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT)
@@ -71,8 +73,7 @@ puts "\[INFO\] Output max delay    : $output_delay_max ns"
 #-------------------------------------------------------------------------------
 # INPUT TIMING / DRIVE
 #-------------------------------------------------------------------------------
-# OpenSTA does not implement Synopsys remove_from_collection.  Enumerate the
-# synchronous non-clock core-boundary inputs explicitly instead.
+# Enumerate synchronous non-clock core-boundary inputs explicitly for OpenSTA.
 set non_clock_inputs [get_ports {
     rst
     imem_req_ready
@@ -83,8 +84,10 @@ set non_clock_inputs [get_ports {
     dmem_rdata*
 }]
 
+# Setup-side boundary timing only.  Do not invent a -min delay for an external
+# memory that is not instantiated in this core-only block; internal reg-to-reg
+# hold analysis remains active.
 set_input_delay -max $input_delay_max -clock $core_clock $non_clock_inputs
-set_input_delay -min 0.0              -clock $core_clock $non_clock_inputs
 
 set_driving_cell \
     -lib_cell sky130_fd_sc_hd__buf_1 \
@@ -94,9 +97,9 @@ set_driving_cell \
 #-------------------------------------------------------------------------------
 # OUTPUT TIMING / LOAD
 #-------------------------------------------------------------------------------
-# All memory-interface outputs are timed as block outputs.
+# Setup-side timing for all memory-interface outputs.  Output min/hold timing is
+# checked at soc_top when the real SRAM/memory-side timing model is present.
 set_output_delay -max $output_delay_max -clock $core_clock [all_outputs]
-set_output_delay -min 0.0               -clock $core_clock [all_outputs]
 
 set cap_load [expr {$::env(OUTPUT_CAP_LOAD) / 1000.0}]
 set_load $cap_load [all_outputs]
