@@ -94,6 +94,7 @@ module datapath(
 
     logic [63:0] pc_id;
     wire [63:0] Readdata1_id, Readdata2_id;
+    wire        Readdata2_zero_id;
     wire [63:0] SE_Dtaddr_id;
     wire [63:0] branch_target_id;
     wire [5:0] shamt_id;
@@ -121,7 +122,8 @@ module datapath(
         .Regwrite(Regwrite_wb),
         .Regwritedata(Regwritedata_wb),
         .Readdata1(Readdata1_id),
-        .Readdata2(Readdata2_id)
+        .Readdata2(Readdata2_id),
+        .Readdata2_zero(Readdata2_zero_id)
     );
 
     /*==============
@@ -129,6 +131,7 @@ module datapath(
       ==============*/
 
     logic [63:0] Readdata1_ex, Readdata2_ex, SE_Dtaddr_ex;
+    logic        Readdata2_zero_ex;
     logic MemtoReg_ex, Memwrite_ex, ALUSrc_ex;
     logic [3:0] ALUop_ex;
     logic [5:0] shamt_ex;
@@ -154,11 +157,13 @@ module datapath(
 
     assign Readdata2_ex_Src = ALUSrc_ex ? SE_Dtaddr_ex : Readdata2_ex_mux;
 
-    // For CBZ, reduce each possible forwarded source to a one-bit zero flag in
-    // parallel, then select between the flags.  This is logically equivalent to
-    // muxing 64-bit data first and then performing a 64-bit zero comparison, but
-    // it removes the wide forwarding mux from the branch redirect timing path.
-    assign branch_zero_reg_ex = ~|Readdata2_ex;
+    // The non-forwarded CBZ operand carries one-bit zero metadata from the
+    // register file through ID/EX.  This removes the 64-bit reduction of
+    // Readdata2_ex from the EX-stage branch redirect critical path.
+    // Forwarded MEM/WB sources remain reduced locally for now; keeping those
+    // reductions here avoids adding extra logic onto the already-critical ALU
+    // result path until timing data shows they are the next bottleneck.
+    assign branch_zero_reg_ex = Readdata2_zero_ex;
     assign branch_zero_mem_ex = ~|result_mem;
     assign branch_zero_wb_ex  = ~|Regwritedata_wb;
 
@@ -248,6 +253,7 @@ module datapath(
         if (rst) begin
             Readdata1_ex       <= 64'd0;
             Readdata2_ex       <= 64'd0;
+            Readdata2_zero_ex  <= 1'b1;
             Memread_ex         <= 1'b0;
             MemtoReg_ex        <= 1'b0;
             Memwrite_ex        <= 1'b0;
@@ -269,6 +275,7 @@ module datapath(
         else if (branch_taken_ex || idhold_id) begin
             Readdata1_ex       <= 64'd0;
             Readdata2_ex       <= 64'd0;
+            Readdata2_zero_ex  <= 1'b1;
             Memread_ex         <= 1'b0;
             MemtoReg_ex        <= 1'b0;
             Memwrite_ex        <= 1'b0;
@@ -287,6 +294,7 @@ module datapath(
         else begin
             Readdata1_ex       <= Readdata1_id;
             Readdata2_ex       <= Readdata2_id;
+            Readdata2_zero_ex  <= Readdata2_zero_id;
             Memread_ex         <= Memread_id;
             MemtoReg_ex        <= MemtoReg_id;
             Memwrite_ex        <= Memwrite_id;
