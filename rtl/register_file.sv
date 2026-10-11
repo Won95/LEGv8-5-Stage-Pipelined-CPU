@@ -6,9 +6,15 @@ module register (
     input  wire        Regwrite,
     input  wire [63:0] Regwritedata,
     output wire [63:0] Readdata1,
-    output wire [63:0] Readdata2
+    output wire [63:0] Readdata2,
+    output wire        Readdata2_zero
 );
     reg [63:0] registers [31:0];
+
+    // One-bit architectural metadata kept alongside each register value.
+    // This lets CBZ carry a precomputed zero flag through ID/EX instead of
+    // reducing all 64 data bits in the EX-stage branch critical path.
+    (* keep = "true" *) reg [31:0] zero_flags;
 
     initial begin
         registers[0]  = 64'd1;
@@ -43,6 +49,9 @@ module register (
         registers[29] = 64'd30;
         registers[30] = 64'd31;
         registers[31] = 64'd0; // XZR
+
+        // Only x11 and XZR are zero in the educational initial state above.
+        zero_flags = 32'h8000_0800;
     end
 
     // ------------------------------------------------------------------------
@@ -133,11 +142,16 @@ module register (
 
     wire [63:0] readdata1_array;
     wire [63:0] readdata2_array;
+    wire        readdata2_zero_array;
     wire bypass_rn;
     wire bypass_rm;
 
     assign readdata1_array = rn_or_l4[0] | rn_or_l4[1];
     assign readdata2_array = rm_or_l4[0] | rm_or_l4[1];
+
+    // A one-bit 32:1 select is far cheaper than reducing the selected 64-bit
+    // operand to zero in EX.  The zero metadata is updated on every WB write.
+    assign readdata2_zero_array = zero_flags[Rm];
 
     // Same-cycle WB -> ID bypass.  Without this, an ID/EX register sampling on
     // the same edge as a register-file write can capture the pre-write value.
@@ -149,12 +163,17 @@ module register (
     assign Readdata2 = (Rm == 5'd31) ? 64'd0 :
                        bypass_rm      ? Regwritedata : readdata2_array;
 
+    assign Readdata2_zero = (Rm == 5'd31) ? 1'b1 :
+                            bypass_rm      ? (~|Regwritedata) : readdata2_zero_array;
+
     // ------------------------------------------------------------------------
     // Synchronous write port
     // ------------------------------------------------------------------------
     always @(posedge clk) begin
-        if (Regwrite && (Rd != 5'd31))
-            registers[Rd] <= Regwritedata;
+        if (Regwrite && (Rd != 5'd31)) begin
+            registers[Rd]  <= Regwritedata;
+            zero_flags[Rd] <= ~|Regwritedata;
+        end
     end
 
 endmodule
