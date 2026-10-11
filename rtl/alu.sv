@@ -10,19 +10,25 @@ module prefix_addsub64 (
     //   ADD: a + b      => b_eff=b,  cin=0
     //   SUB: a + ~b + 1 => b_eff=~b, cin=1
     //
-    // Keep each prefix level as a separately named vector.  The previous
-    // unpacked p[0:6]/g[0:6] arrays were logically acyclic, but Verilator
-    // tracked the whole array as one dependency object and reported UNOPTFLAT
-    // circular-combinational warnings.  These explicit stages describe the
-    // same six-level parallel-prefix network without that false dependency.
+    // Six explicit prefix levels keep the network acyclic for lint and make
+    // the logarithmic carry topology visible to synthesis.
     wire [63:0] b_eff;
     wire [63:0] p0, p1, p2, p3, p4, p5, p6;
+    wire [63:0] g_raw;
     wire [63:0] g0, g1, g2, g3, g4, g5, g6;
     wire [63:0] carry_in;
 
     assign b_eff = b ^ {64{sub}};
     assign p0    = a ^ b_eff;
-    assign g0    = a & b_eff;
+    assign g_raw = a & b_eff;
+
+    // Fold the add/sub carry-in into bit 0 before the prefix tree.  The old
+    // implementation also fed 'sub' into every final carry equation, creating
+    // a second ~64-load fanout tree on the subtract control.  Once cin is
+    // absorbed into g0[0], the prefix network propagates it naturally and each
+    // carry bit can come directly from the corresponding group-generate term.
+    assign g0[0]    = g_raw[0] | (p0[0] & sub);
+    assign g0[63:1] = g_raw[63:1];
 
     genvar i;
     generate
@@ -77,14 +83,12 @@ module prefix_addsub64 (
         end
     endgenerate
 
-    // carry_in[i] is the carry entering sum bit i.  The carry out of bit 63
-    // is intentionally not built because the ALU does not consume it.
     assign carry_in[0] = sub;
 
     genvar k;
     generate
         for (k = 1; k < 64; k = k + 1) begin : gen_carry_in
-            assign carry_in[k] = g6[k-1] | (p6[k-1] & sub);
+            assign carry_in[k] = g6[k-1];
         end
     endgenerate
 
@@ -104,8 +108,6 @@ module ALU (
 
     assign is_sub = (ALUop == 4'b0110);
 
-    // ADD and SUB share one physical arithmetic datapath.  This avoids
-    // synthesizing two independent 64-bit arithmetic cones followed by a mux.
     prefix_addsub64 u_prefix_addsub (
         .a   (Readdata1),
         .b   (Readdata2),
@@ -121,7 +123,7 @@ module ALU (
             4'b0110: result = arithmetic_result;           // SUB
             4'b0111: result = Readdata2;                   // pass B
             4'b1100: result = ~(Readdata1 | Readdata2);    // NOR
-            4'b1110: result = Readdata1 << shamt;           // LSL
+            4'b1110: result = Readdata1 << shamt;          // LSL
             default: result = 64'd0;
         endcase
     end
