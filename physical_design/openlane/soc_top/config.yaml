@@ -1,0 +1,89 @@
+# =============================================================================
+# LEGv8 SoC - OpenLane 2 Classic flow master configuration
+# =============================================================================
+# Human-editable master config for soc_top.
+# Run with: openlane --flow Classic config.yaml
+# =============================================================================
+
+DESIGN_NAME: soc_top
+PDK: sky130A
+
+VERILOG_FILES:
+  - dir::../../../rtl/ahb_lite_fabric.sv
+  - dir::../../../rtl/ahb_lite_master.sv
+  - dir::../../../rtl/alu.sv
+  - dir::../../../rtl/control.sv
+  - dir::../../../rtl/core.sv
+  - dir::../../../rtl/datapath.sv
+  - dir::../../../rtl/forwarding_unit.sv
+  - dir::../../../rtl/hazard_detection_unit.sv
+  - dir::../../../rtl/memory_loader.sv
+  - dir::../../../rtl/mmio_gpio.sv
+  - dir::../../../rtl/mmio_subsystem.sv
+  - dir::../../../rtl/mmio_uart.sv
+  - dir::../../../rtl/program_counter.sv
+  - dir::../../../rtl/register_file.sv
+  - dir::../../../rtl/sign_extension.sv
+  - dir::../../../rtl/simple_fifo.sv
+  - dir::../../../rtl/soc_top.sv
+  - dir::../../../rtl/sram_wrapper.sv
+  - dir::../../../rtl/sram_wrapper32b.sv
+
+EXTRA_VERILOG_MODELS:
+  - dir::./sky130_sram_1kbyte_1rw1r_32x256_8.blackbox.v
+
+CLOCK_PORT: clk
+CLOCK_PERIOD: 15
+
+SYNTH_STRATEGY: "AREA 0"
+SYNTH_HIERARCHY_MODE: flatten
+SYNTH_SHARE_RESOURCES: true
+SYNTH_ABC_BUFFERING: true
+SYNTH_SIZING: false
+SYNTH_ABC_DFF: false
+SYNTH_DIRECT_WIRE_BUFFERING: true
+SYNTH_SPLITNETS: true
+SYNTH_ADDER_TYPE: YOSYS
+SYNTH_MUL_BOOTH: false
+SYNTH_TIE_UNDEFINED: low
+SYNTH_WRITE_NOATTR: true
+USE_LIGHTER: false
+USE_SYNLIG: false
+YOSYS_LOG_LEVEL: ALL
+
+VERILOG_POWER_DEFINE: USE_POWER_PINS
+VDD_NETS:
+  - vccd1
+GND_NETS:
+  - vssd1
+
+PNR_SDC_FILE: dir::./top.con
+SIGNOFF_SDC_FILE: dir::./top.con
+
+FP_PDN_MULTILAYER: true
+MAGIC_MACRO_STD_CELL_SOURCE: PDK
+MAGIC_LEF_WRITE_USE_GDS: false
+RUN_MAGIC_WRITE_LEF: true
+MAGIC_DRC_USE_GDS: false
+QUIT_ON_MAGIC_DRC: false
+MAGIC_CAPTURE_ERRORS: false
+
+MACROS:
+  sky130_sram_1kbyte_1rw1r_32x256_8:
+    gds:
+      - /home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_sram_macros/gds/sky130_sram_1kbyte_1rw1r_32x256_8.gds
+    lef:
+      - /home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_sram_macros/lef/sky130_sram_1kbyte_1rw1r_32x256_8.lef
+    instances:
+      instruction_sram.SRAM_IMEM:
+        location: [40, 800]
+        orientation: N
+      data_sram.SRAM_LOW:
+        location: [720, 800]
+        orientation: N
+      data_sram.SRAM_HIGH:
+        location: [720, 350]
+        orientation: N
+    lib:
+      "*":
+        - /home/skdml/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_sram_macros/lib/sky130_sram_1kbyte_1rw1r_32x256_8_TT_1p8V_25C.lib
