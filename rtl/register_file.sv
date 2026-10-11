@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module register (
     input  wire        clk,
     input  wire [4:0]  Rm,
@@ -5,6 +7,7 @@ module register (
     input  wire [4:0]  Rd,
     input  wire        Regwrite,
     input  wire [63:0] Regwritedata,
+    input  wire        Regwrite_zero,
     output wire [63:0] Readdata1,
     output wire [63:0] Readdata2,
     output wire        Readdata2_zero
@@ -12,9 +15,9 @@ module register (
     reg [63:0] registers [31:0];
 
     // One-bit architectural metadata kept alongside each register value.
-    // This lets CBZ carry a precomputed zero flag through ID/EX instead of
-    // reducing all 64 data bits in the EX-stage branch critical path.
-    (* keep = "true" *) reg [31:0] zero_flags;
+    // Regwrite_zero is generated and registered in MEM/WB, so neither the
+    // CBZ bypass path nor this array update has to reduce the 64-bit WB bus.
+    reg [31:0] zero_flags;
 
     initial begin
         registers[0]  = 64'd1;
@@ -57,13 +60,11 @@ module register (
     // ------------------------------------------------------------------------
     // Timing-oriented asynchronous read decode
     // ------------------------------------------------------------------------
-    // Split the 5-bit address into 2-bit and 3-bit predecoders.  This prevents
-    // each raw address bit from directly driving all 32 word comparators, which
-    // previously produced very large select-net fanout after standard-cell
-    // mapping.  Each final one-hot select is then used by the 64-bit word mask.
-    (* keep = "true" *) wire [3:0] rn_hi_sel, rm_hi_sel;
-    (* keep = "true" *) wire [7:0] rn_lo_sel, rm_lo_sel;
-    (* keep = "true" *) wire [31:0] rn_sel, rm_sel;
+    // Split the 5-bit address into 2-bit and 3-bit predecoders.  This keeps raw
+    // address-bit fanout bounded while retaining a balanced data OR tree.
+    wire [3:0] rn_hi_sel, rm_hi_sel;
+    wire [7:0] rn_lo_sel, rm_lo_sel;
+    wire [31:0] rn_sel, rm_sel;
 
     assign rn_hi_sel[0] = ~Rn[4] & ~Rn[3];
     assign rn_hi_sel[1] = ~Rn[4] &  Rn[3];
@@ -110,7 +111,6 @@ module register (
         end
     endgenerate
 
-    // Balanced 32:1 OR reduction for both read ports.
     wire [63:0] rn_or_l1 [15:0];
     wire [63:0] rn_or_l2 [7:0];
     wire [63:0] rn_or_l3 [3:0];
@@ -143,18 +143,15 @@ module register (
     wire [63:0] readdata1_array;
     wire [63:0] readdata2_array;
     wire        readdata2_zero_array;
-    wire bypass_rn;
-    wire bypass_rm;
+    wire        bypass_rn;
+    wire        bypass_rm;
 
     assign readdata1_array = rn_or_l4[0] | rn_or_l4[1];
     assign readdata2_array = rm_or_l4[0] | rm_or_l4[1];
-
-    // A one-bit 32:1 select is far cheaper than reducing the selected 64-bit
-    // operand to zero in EX.  The zero metadata is updated on every WB write.
     assign readdata2_zero_array = zero_flags[Rm];
 
-    // Same-cycle WB -> ID bypass.  Without this, an ID/EX register sampling on
-    // the same edge as a register-file write can capture the pre-write value.
+    // Same-cycle WB -> ID bypass.  The zero flag is bypassed from its registered
+    // one-bit companion instead of being recomputed from the 64-bit WB bus.
     assign bypass_rn = Regwrite && (Rd != 5'd31) && (Rd == Rn);
     assign bypass_rm = Regwrite && (Rd != 5'd31) && (Rd == Rm);
 
@@ -164,15 +161,12 @@ module register (
                        bypass_rm      ? Regwritedata : readdata2_array;
 
     assign Readdata2_zero = (Rm == 5'd31) ? 1'b1 :
-                            bypass_rm      ? (~|Regwritedata) : readdata2_zero_array;
+                            bypass_rm      ? Regwrite_zero : readdata2_zero_array;
 
-    // ------------------------------------------------------------------------
-    // Synchronous write port
-    // ------------------------------------------------------------------------
     always @(posedge clk) begin
         if (Regwrite && (Rd != 5'd31)) begin
             registers[Rd]  <= Regwritedata;
-            zero_flags[Rd] <= ~|Regwritedata;
+            zero_flags[Rd] <= Regwrite_zero;
         end
     end
 
