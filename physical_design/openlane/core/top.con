@@ -1,12 +1,16 @@
 #===============================================================================
 # core_pd_top PnR / STA constraints
 #
-# Core-only block timing model:
-#   - Instruction/data memories are outside core_pd_top.
-#   - Their setup-side interface timing is represented with primary-I/O delays.
-#   - I/O hold timing is intentionally not constrained here because the external
-#     memory/macros and their min-delay requirements are not part of this block.
-#   - Full memory/macro setup/hold timing is analyzed separately at soc_top level.
+# Timing model aligned with the soc_top baseline and adapted for the core-only
+# IMEM / DMEM block boundary:
+#   - 7 ns clock target from config
+#   - 2 ns external source latency
+#   - 1 ns pre-CTS clock-network latency
+#   - 1.5 ns setup uncertainty
+#   - 1 ns clock transition
+#   - 1~3 ns I/O timing window
+#   - medium-strength input drive
+#   - 0.2 pF output load
 #===============================================================================
 
 #-------------------------------------------------------------------------------
@@ -24,56 +28,52 @@ create_clock \
 
 set core_clock [get_clocks MAIN_CLOCK]
 
-# Common-mode pre-CTS latency assumptions.
-set_clock_latency -source -min 2.0 $core_clock
-set_clock_latency -source -max 2.0 $core_clock
+#-------------------------------------------------------------------------------
+# CLOCK LATENCY
+#
+# External clock source latency : 2 ns
+# Pre-CTS clock-network latency : 1 ns
+# Post-CTS                     : use the propagated clock tree
+#-------------------------------------------------------------------------------
+set_clock_latency -source -min 2 $core_clock
+set_clock_latency -source -max 2 $core_clock
 
 if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL_CLOCKS) } {
-    set_clock_latency -min 1.0 $core_clock
-    set_clock_latency -max 1.0 $core_clock
+    set_clock_latency -min 1 $core_clock
+    set_clock_latency -max 1 $core_clock
     unset_propagated_clock $core_clock
 } else {
     set_propagated_clock $core_clock
 }
 
-set_clock_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT) $core_clock
-set_clock_transition  $::env(CLOCK_TRANSITION_CONSTRAINT)  $core_clock
+#-------------------------------------------------------------------------------
+# CLOCK UNCERTAINTY
+#
+# Reference budget:
+#   skew         : 0.6 ns
+#   jitter       : 0.4 ns
+#   setup margin : 0.5 ns
+#   total        : 1.5 ns
+#-------------------------------------------------------------------------------
+set_clock_uncertainty -setup 1.5 $core_clock
+
+#-------------------------------------------------------------------------------
+# CLOCK TRANSITION
+#-------------------------------------------------------------------------------
+set_clock_transition 1 $core_clock
 
 #-------------------------------------------------------------------------------
 # DESIGN-RULE CONSTRAINTS
 #-------------------------------------------------------------------------------
 set_max_fanout $::env(MAX_FANOUT_CONSTRAINT) [current_design]
 
-if { [info exists ::env(MAX_TRANSITION_CONSTRAINT)] } {
-    set_max_transition $::env(MAX_TRANSITION_CONSTRAINT) [current_design]
-}
-
-if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
-    set_max_capacitance $::env(MAX_CAPACITANCE_CONSTRAINT) [current_design]
-}
-
 #-------------------------------------------------------------------------------
-# BLOCK I/O TIMING BUDGET
+# INPUT TIMING
+#
+# Core-only block boundary to external IMEM / DMEM logic:
+#   max input delay = 3 ns
+#   min input delay = 1 ns
 #-------------------------------------------------------------------------------
-# Reserve 6.0 ns for the core-internal portion of each synchronous I/O setup path.
-# With a 7 ns clock and 0.25 ns setup uncertainty this gives 0.75 ns of
-# external-interface setup budget at each block boundary.
-set input_internal_tmax  6.0
-set output_internal_tmax 6.0
-set setup_uncertainty $::env(CLOCK_UNCERTAINTY_CONSTRAINT)
-
-set input_delay_max  [expr {$clk_period - $setup_uncertainty - $input_internal_tmax}]
-set output_delay_max [expr {$clk_period - $setup_uncertainty - $output_internal_tmax}]
-
-puts "\[INFO\] Input internal Tmax : $input_internal_tmax ns"
-puts "\[INFO\] Output internal Tmax: $output_internal_tmax ns"
-puts "\[INFO\] Input max delay     : $input_delay_max ns"
-puts "\[INFO\] Output max delay    : $output_delay_max ns"
-
-#-------------------------------------------------------------------------------
-# INPUT TIMING / DRIVE
-#-------------------------------------------------------------------------------
-# Enumerate synchronous non-clock core-boundary inputs explicitly for OpenSTA.
 set non_clock_inputs [get_ports {
     rst
     imem_req_ready
@@ -84,30 +84,48 @@ set non_clock_inputs [get_ports {
     dmem_rdata*
 }]
 
-# Setup-side boundary timing only.  Do not invent a -min delay for an external
-# memory that is not instantiated in this core-only block; internal reg-to-reg
-# hold analysis remains active.
-set_input_delay -max $input_delay_max -clock $core_clock $non_clock_inputs
+set_input_delay -max 3 -clock $core_clock $non_clock_inputs
+set_input_delay -min 1 -clock $core_clock $non_clock_inputs
+
+# Model external memory-side logic as a medium-strength Sky130 buffer.
+# Reset is excluded from the driving-cell model.
+set driven_inputs [get_ports {
+    imem_req_ready
+    imem_rsp_valid
+    imem_rsp_addr*
+    imem_rsp_data*
+    dmem_ready
+    dmem_rdata*
+}]
 
 set_driving_cell \
-    -lib_cell sky130_fd_sc_hd__buf_1 \
+    -lib_cell sky130_fd_sc_hd__buf_2 \
     -pin X \
-    $non_clock_inputs
+    $driven_inputs
 
 #-------------------------------------------------------------------------------
-# OUTPUT TIMING / LOAD
+# OUTPUT TIMING
+#
+# Core outputs drive the external IMEM / DMEM boundary:
+#   max output delay = 3 ns
+#   min output delay = 1 ns
 #-------------------------------------------------------------------------------
-# Setup-side timing for all memory-interface outputs.  Output min/hold timing is
-# checked at soc_top when the real SRAM/memory-side timing model is present.
-set_output_delay -max $output_delay_max -clock $core_clock [all_outputs]
+set_output_delay -max 3 -clock $core_clock [all_outputs]
+set_output_delay -min 1 -clock $core_clock [all_outputs]
 
-set cap_load [expr {$::env(OUTPUT_CAP_LOAD) / 1000.0}]
-set_load $cap_load [all_outputs]
+# OpenSTA does not support Synopsys load_of; apply capacitance directly.
+set output_load 0.2
+set_load $output_load [all_outputs]
 
 #-------------------------------------------------------------------------------
 # PVT / DERATE
 #-------------------------------------------------------------------------------
-set_timing_derate -early [expr {1.0 - ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
-set_timing_derate -late  [expr {1.0 + ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
+set_timing_derate \
+    -early \
+    [expr {1.0 - ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
+
+set_timing_derate \
+    -late \
+    [expr {1.0 + ($::env(TIME_DERATING_CONSTRAINT) / 100.0)}]
 
 #===============================================================================
