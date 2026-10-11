@@ -33,14 +33,16 @@ module core(
     wire [3:0] ALUop_id;
 
     // Hazard / pipeline metadata
-    wire [4:0] Rd_ex, Rd_mem, Rn_id, Rm_id;
-    wire Memread_ex, MemtoReg_mem;
+    wire [4:0] Rd_ex, Rd_mem, Rn_id, Rm_id, Rd_wb;
+    wire Memread_ex, Regwrite_ex;
     wire hazardmux_id, idhold_id, pchold_id;
-
-    // Forwarding metadata
-    wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
-    wire [4:0] Rm_ex, Rn_ex, Rd_wb;
     wire Regwrite_mem, Regwrite_wb;
+
+    // Forwarding decisions are computed while the consumer is still in ID,
+    // then registered into ID/EX.  This removes destination compares and
+    // priority logic from the EX -> ALU critical path.
+    wire [1:0] fwdmuxa_id, fwdmuxb_id;
+    wire [1:0] fwdmuxa_ex, fwdmuxb_ex;
 
     datapath datapath (
         .clk(clk),
@@ -57,8 +59,8 @@ module core(
         .hazardmux_id(hazardmux_id),
         .idhold_id(idhold_id),
         .pchold_id(pchold_id),
-        .muxa(fwdmuxa_ex),
-        .muxb(fwdmuxb_ex),
+        .fwdmuxa_id(fwdmuxa_id),
+        .fwdmuxb_id(fwdmuxb_id),
 
         .imem_req_addr(imem_req_addr),
         .imem_req_valid(imem_req_valid),
@@ -81,14 +83,13 @@ module core(
         .instruction_id(instruction_id),
         .Rd_ex(Rd_ex),
         .Rd_mem(Rd_mem),
-        .Memread_ex(Memread_ex),
-        .Regwrite_ex(),
-        .MemtoReg_mem(MemtoReg_mem),
-        .Rm_ex(Rm_ex),
-        .Rn_ex(Rn_ex),
         .Rd_wb(Rd_wb),
+        .Memread_ex(Memread_ex),
+        .Regwrite_ex(Regwrite_ex),
         .Regwrite_mem(Regwrite_mem),
-        .Regwrite_wb(Regwrite_wb)
+        .Regwrite_wb(Regwrite_wb),
+        .fwdmuxa_ex(fwdmuxa_ex),
+        .fwdmuxb_ex(fwdmuxb_ex)
     );
 
     Control ctrl (
@@ -119,15 +120,17 @@ module core(
     );
 
     forwardingunit fwd (
-        .Rm_ex(Rm_ex),
-        .Rn_ex(Rn_ex),
+        .Rm_id(Rm_id),
+        .Rn_id(Rn_id),
+        .UseRm_id(UseRm_id),
+        .UseRn_id(UseRn_id),
+        .Rd_ex(Rd_ex),
         .Rd_mem(Rd_mem),
-        .Rd_wb(Rd_wb),
+        .Regwrite_ex(Regwrite_ex),
+        .Memread_ex(Memread_ex),
         .Regwrite_mem(Regwrite_mem),
-        .MemtoReg_mem(MemtoReg_mem),
-        .Regwrite_wb(Regwrite_wb),
-        .muxa(fwdmuxa_ex),
-        .muxb(fwdmuxb_ex)
+        .muxa_id(fwdmuxa_id),
+        .muxb_id(fwdmuxb_id)
     );
 
 endmodule
