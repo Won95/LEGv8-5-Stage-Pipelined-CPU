@@ -34,7 +34,7 @@ module core(
 
     // Hazard / pipeline metadata
     wire [4:0] Rd_ex, Rd_mem, Rn_id, Rm_id;
-    wire Memread_ex, Regwrite_ex, MemtoReg_mem;
+    wire Memread_ex, MemtoReg_mem;
     wire hazardmux_id, idhold_id, pchold_id;
 
     // Forwarding metadata
@@ -82,7 +82,7 @@ module core(
         .Rd_ex(Rd_ex),
         .Rd_mem(Rd_mem),
         .Memread_ex(Memread_ex),
-        .Regwrite_ex(Regwrite_ex),
+        .Regwrite_ex(),
         .MemtoReg_mem(MemtoReg_mem),
         .Rm_ex(Rm_ex),
         .Rn_ex(Rn_ex),
