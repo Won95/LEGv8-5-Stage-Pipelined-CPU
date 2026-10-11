@@ -119,11 +119,11 @@ set functional_outputs [get_ports {
 set_output_delay -max 3 -clock $core_clock $functional_outputs
 set_output_delay -min 1 -clock $core_clock $functional_outputs
 
-# Model a relatively heavy external receiver using the input capacitance of a
-# large Sky130 buffer, analogous to the NBUFFX32_RVT load in the reference SDC.
-set_load \
-    [load_of sky130_fd_sc_hd__buf_12/A] \
-    $functional_outputs
+# OpenSTA does not support Synopsys/DC's load_of command.  Use an explicit
+# capacitive load instead.  A relatively heavy 0.2 pF receiver load is used
+# for this conservative top-level baseline.
+set output_load 0.2
+set_load $output_load $functional_outputs
 
 #-------------------------------------------------------------------------------
 # PVT / DERATE
