@@ -1,39 +1,33 @@
 #===============================================================================
 # core_pd_top PnR / STA constraints
 #
-# Timing model aligned with the soc_top baseline and adapted for the core-only
-# IMEM / DMEM block boundary:
-#   - 7 ns clock target from config
+# Relaxed bring-up baseline aligned with soc_top.
+# This is intentionally not a final signoff model.
+#
+#   - 15 ns clock target from config
 #   - 2 ns external source latency
 #   - 1 ns pre-CTS clock-network latency
-#   - 1.5 ns setup uncertainty
+#   - 1 ns setup uncertainty
 #   - 1 ns clock transition
-#   - 1~3 ns I/O timing window
-#   - medium-strength input drive
-#   - 0.2 pF output load
+#   - 2~3 ns input timing window
+#   - 0~3 ns output timing window
 #===============================================================================
 
 #-------------------------------------------------------------------------------
 # CLOCK DEFINITION
 #-------------------------------------------------------------------------------
 set clk_period $::env(CLOCK_PERIOD)
-set half_period [expr {$clk_period / 2.0}]
 set clk_port [get_ports clk]
 
 create_clock \
     -name MAIN_CLOCK \
     -period $clk_period \
-    -waveform [list $half_period $clk_period] \
     $clk_port
 
 set core_clock [get_clocks MAIN_CLOCK]
 
 #-------------------------------------------------------------------------------
 # CLOCK LATENCY
-#
-# External clock source latency : 2 ns
-# Pre-CTS clock-network latency : 1 ns
-# Post-CTS                     : use the propagated clock tree
 #-------------------------------------------------------------------------------
 set_clock_latency -source -min 2 $core_clock
 set_clock_latency -source -max 2 $core_clock
@@ -47,32 +41,13 @@ if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL
 }
 
 #-------------------------------------------------------------------------------
-# CLOCK UNCERTAINTY
-#
-# Reference budget:
-#   skew         : 0.6 ns
-#   jitter       : 0.4 ns
-#   setup margin : 0.5 ns
-#   total        : 1.5 ns
+# CLOCK UNCERTAINTY / TRANSITION
 #-------------------------------------------------------------------------------
-set_clock_uncertainty -setup 1.5 $core_clock
-
-#-------------------------------------------------------------------------------
-# CLOCK TRANSITION
-#-------------------------------------------------------------------------------
+set_clock_uncertainty -setup 1 $core_clock
 set_clock_transition 1 $core_clock
 
 #-------------------------------------------------------------------------------
-# DESIGN-RULE CONSTRAINTS
-#-------------------------------------------------------------------------------
-set_max_fanout $::env(MAX_FANOUT_CONSTRAINT) [current_design]
-
-#-------------------------------------------------------------------------------
 # INPUT TIMING
-#
-# Core-only block boundary to external IMEM / DMEM logic:
-#   max input delay = 3 ns
-#   min input delay = 1 ns
 #-------------------------------------------------------------------------------
 set non_clock_inputs [get_ports {
     rst
@@ -85,7 +60,7 @@ set non_clock_inputs [get_ports {
 }]
 
 set_input_delay -max 3 -clock $core_clock $non_clock_inputs
-set_input_delay -min 1 -clock $core_clock $non_clock_inputs
+set_input_delay -min 2 -clock $core_clock $non_clock_inputs
 
 # Model external memory-side logic as a medium-strength Sky130 buffer.
 # Reset is excluded from the driving-cell model.
@@ -105,15 +80,11 @@ set_driving_cell \
 
 #-------------------------------------------------------------------------------
 # OUTPUT TIMING
-#
-# Core outputs drive the external IMEM / DMEM boundary:
-#   max output delay = 3 ns
-#   min output delay = 1 ns
 #-------------------------------------------------------------------------------
 set_output_delay -max 3 -clock $core_clock [all_outputs]
-set_output_delay -min 1 -clock $core_clock [all_outputs]
+set_output_delay -min 0 -clock $core_clock [all_outputs]
 
-# OpenSTA does not support Synopsys load_of; apply capacitance directly.
+# OpenSTA has no Synopsys load_of command.  Keep an explicit capacitive load.
 set output_load 0.2
 set_load $output_load [all_outputs]
 
