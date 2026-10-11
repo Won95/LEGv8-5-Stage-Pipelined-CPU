@@ -36,7 +36,7 @@ VERILOG_POWER_DEFINE: USE_POWER_PINS      # Define used to guard power pins.
 SYNTH_PARAMETERS: null                    # Optional Yosys chparam key=value list.
 
 CLOCK_PORT: clk                           # Primary clock port.
-CLOCK_PERIOD: 7                           # Target period in ns.
+CLOCK_PERIOD: 15                          # Relaxed bring-up target period in ns.
 PNR_SDC_FILE: dir::./top.con              # Constraints for implementation stages.
 SIGNOFF_SDC_FILE: dir::./top.con          # Constraints for post-route/signoff STA.
 
