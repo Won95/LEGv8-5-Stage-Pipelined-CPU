@@ -2,32 +2,52 @@
 
 This directory contains the standalone CPU-core physical-design setup used before hard SRAM and chip-level I/O integration.
 
-## `config.json`
+## Configuration files
 
-`config.json` is kept as valid JSON, so inline `//` or `#` comments are intentionally not used. The options are documented here instead.
+- `config.yaml`
+  - Human-editable master configuration.
+  - Run with `openlane --flow Classic config.yaml`.
+- `config.json`
+  - JSON mirror used when a pure JSON configuration is preferred.
+- `top.con`
+  - OpenROAD/OpenSTA timing constraints used for PnR and signoff STA.
 
-### Design / PDK
+Keep `config.yaml`, `config.json`, and `top.con` synchronized when changing the timing target.
+
+## Design / PDK
 
 - `DESIGN_NAME = core_pd_top`
   - Top module for the standalone core PD stage.
 - `PDK = sky130A`
-  - Selects the Sky130A PDK. OpenLane resolves the standard-cell library, Liberty timing data, LEF/GDS, timing corners, driving-cell defaults, output load, and related PDK data from this selection.
+  - Selects the Sky130A PDK and its standard-cell timing/physical data.
 
-### RTL sources
+## RTL sources
 
 - `VERILOG_FILES`
   - Explicit list of RTL files passed to Yosys.
-  - This replaces the search-path-oriented style commonly used in Synopsys DC setups.
+  - Includes `core_pd_top.sv` plus the LEGv8 core RTL modules.
 
-### Clock
+## Current relaxed bring-up timing baseline
+
+The current baseline is intentionally loose. Its purpose is to establish a clean PnR/STA reference before tightening the clock target.
 
 - `CLOCK_PORT = clk`
-  - Primary clock input.
-- `CLOCK_PERIOD = 7`
-  - 7 ns implementation target, approximately 142.9 MHz.
-  - `top.con` uses the same period for OpenROAD/OpenSTA timing analysis.
+- `CLOCK_PERIOD = 15 ns`
+  - Approximately 66.7 MHz.
+- External/source clock latency: 2 ns
+- Pre-CTS internal clock-network latency estimate: 1 ns
+- Post-CTS clock: propagated physical clock tree
+- Setup uncertainty: 1 ns
+- Clock transition: 1 ns
+- Input delay: min 2 ns / max 3 ns
+- Output delay: min 0 ns / max 3 ns
+- Input driving cell: `sky130_fd_sc_hd__buf_2/X`
+- Output load: 0.2 pF
+- Timing derate: OpenLane `TIME_DERATING_CONSTRAINT`
 
-### Synthesis
+The I/O delays are provisional block-level assumptions, not chip/package signoff specifications. They are intentionally relaxed so that standalone core analysis emphasizes internal register-to-register timing, clock-tree behavior, routing, and electrical quality.
+
+## Synthesis
 
 - `SYNTH_STRATEGY = AREA 0`
   - Area-oriented ABC technology-mapping strategy.
@@ -35,78 +55,60 @@ This directory contains the standalone CPU-core physical-design setup used befor
   - Flattens the design hierarchy for synthesis.
 - `SYNTH_SHARE_RESOURCES = true`
   - Allows Yosys to share equivalent/common resources where possible.
-- `SYNTH_ABC_BUFFERING = false`
-  - Disables extra ABC buffering during synthesis.
+- `SYNTH_ABC_BUFFERING = true`
+  - Allows ABC buffering during technology mapping.
 - `SYNTH_SIZING = false`
-  - Disables synthesis-stage cell sizing; physical optimization is handled later by OpenROAD.
+  - Leaves physical sizing primarily to OpenROAD.
 - `SYNTH_ABC_DFF = false`
   - Prevents ABC from remapping sequential cells.
 - `SYNTH_DIRECT_WIRE_BUFFERING = true`
-  - Enables direct-wire buffering handling in the synthesis flow.
 - `SYNTH_SPLITNETS = true`
-  - Splits multi-bit nets where required for downstream processing.
 - `SYNTH_ADDER_TYPE = YOSYS`
-  - Uses Yosys' native adder implementation.
 - `SYNTH_MUL_BOOTH = false`
-  - Does not use Booth multiplier transformation.
 - `SYNTH_TIE_UNDEFINED = low`
-  - Resolves undefined values to logic 0.
 - `SYNTH_WRITE_NOATTR = true`
-  - Writes the synthesized netlist without Yosys attributes.
 - `USE_LIGHTER = false`
-  - Uses the normal Yosys synthesis flow rather than Lighter.
 - `USE_SYNLIG = false`
-  - Uses the standard Yosys frontend rather than Synlig.
 - `YOSYS_LOG_LEVEL = ALL`
-  - Keeps detailed Yosys logs for synthesis/debugging.
 
-### Timing constraints
+## Physical implementation baseline
 
-- `PNR_SDC_FILE = dir::./top.con`
-  - Used by OpenROAD/OpenSTA during pre-PnR and PnR timing analysis.
-- `SIGNOFF_SDC_FILE = dir::./top.con`
-  - Used for post-PnR/signoff timing analysis.
+- `FP_SIZING = relative`
+- `FP_ASPECT_RATIO = 1.0`
+- `FP_CORE_UTIL = 35`
+- `PL_TARGET_DENSITY_PCT = 45`
+- Timing-driven placement enabled
+- Routability-driven placement enabled
+- CTS enabled
+- Post-CTS timing resizer enabled
+- Global routing antenna repair enabled
+- Detailed routing enabled
+- Multi-corner post-PnR STA enabled
+- SPEF extraction enabled
 
-`top.con` is not sourced by stock `Yosys.Synthesis`; synthesis timing optimization is handled separately by OpenLane/Yosys/ABC.
+The design relies on Liberty/PDK limits for slew and capacitance checks. No extra global `set_max_fanout` constraint is imposed in `top.con` for the relaxed baseline.
 
-## `top.con` policy
+## Timing-closure workflow
 
-The current constraint file intentionally combines the IDEC reference assumptions with OpenLane/Sky130-specific timing environment values.
-
-- Clock period: 7 ns
-- Clock waveform: `{3.5 7.0}` for a 7 ns period
-- External/source clock latency: max 2 ns
-- Pre-CTS internal/network clock latency estimate: max 1 ns
-- Post-CTS clock: propagated physical clock tree
-- Clock uncertainty: `CLOCK_UNCERTAINTY_CONSTRAINT`
-- Clock transition: `CLOCK_TRANSITION_CONSTRAINT`
-- Max fanout / transition / capacitance: OpenLane environment values
-- Input driving cell: `sky130_fd_sc_hd__buf_1/X` for synchronous `rst`
-- Output load: OpenLane PDK `OUTPUT_CAP_LOAD`
-- Timing derate: OpenLane `TIME_DERATING_CONSTRAINT`
-
-### Provisional I/O timing budget
-
-The current input/output delay values are derived from an intentionally loose internal-path target used for the first STA pass:
+Use 15 ns as the initial reference point. After a clean run, reduce the period step-by-step, for example:
 
 ```text
-input_delay(max)  = Tclk - uncertainty - Tmax(input port -> FF D)
-output_delay(max) = Tclk - uncertainty - Tmax(FF Q -> output port)
+15 ns -> 12 ns -> 10 ns -> 8 ns -> 7 ns
 ```
 
-For the first pass:
+At each step, check:
 
-```text
-Tmax(input port -> FF D) = 6.0 ns
-Tmax(FF Q -> output port) = 6.0 ns
-```
+1. Overall setup/hold WNS and TNS.
+2. Register-to-register setup and hold slack separately from I/O-boundary paths.
+3. Max slew and max capacitance violations.
+4. The worst setup path at the first period that fails.
 
-These 6 ns values are provisional. After `OpenROAD.STAPrePNR`, the actual worst input-to-register and register-to-output path delays should be inspected and the I/O budget should be tightened based on measured timing rather than treated as a final specification.
+Do not change the clock period merely to hide slew/capacitance problems. Electrical violations should be analyzed independently from architectural or combinational-path timing limits.
 
-### Deliberately omitted constraints
+## Deliberately omitted constraints
 
 - No generated clock: this standalone core currently has one clock only.
 - No clock groups: there is no multi-clock relationship to constrain.
 - No asynchronous-reset false path: `rst` is synchronous in this RTL.
 - No multicycle/false-path exceptions are added unless justified by the RTL protocol/architecture.
-- No explicit operating-condition names are copied from SAED32; Sky130 PVT/corner selection is handled by the OpenLane PDK configuration.
+- No explicit SAED-style operating-condition names are copied into this Sky130/OpenLane flow.
