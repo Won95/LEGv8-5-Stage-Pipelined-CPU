@@ -22,7 +22,5 @@ IMEM과 DMEM은 3개의 `sky130_sram_1kbyte_1rw1r_32x256_8` Hard SRAM Macro로 �
 
 ### Physical Design 결과
 
-`soc_top`에 Sky130 SRAM Hard Macro 3개를 통합한 뒤 Placement, CTS, Routing을 수행하여 생성한 최종 Layout이다.
-
-![soc_top Final Layout](./results/soc_top_final_layout.jpg)
-
+`soc_top`에 Sky130 SRAM Hard Macro 3개를 통합한 뒤 Placement, CTS, Routing을 수행하여 생성한 최종 Layout입니다.
+<img width="2169" height="1252" alt="c" src="https://github.com/user-attachments/assets/de416b4a-2cf9-4a11-9eb6-5644c44fd200" />
