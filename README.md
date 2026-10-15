@@ -192,9 +192,3 @@ RTL
 - Routing / Timing closure
 - Sky130 기반 DRC / LVS
 
-## Scope
-
-이 프로젝트는 완전한 commercial MCU 구현을 목표로 하지 않습니다.
-
-> **5-stage LEGv8 CPU + AHB-Lite + SRAM hard macros + MMIO를 포함한 small SoC를 구성하고, 이를 Sky130에서 RTL-to-GDSII까지 구현 및 분석하는 것**
-
