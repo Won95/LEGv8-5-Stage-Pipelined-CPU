@@ -156,15 +156,23 @@ External memory / FIFO / Loader는 프로그램과 초기 데이터를 simulatio
 │   ├── soc_top.sv
 │   └── ...
 ├── tb/
+│   ├── top_tb.sv
+│   ├── soc_top_tb.sv
+│   └── external_memory_model.sv
 ├── constraints/
 ├── physical_design/
+│   ├── core/
+│   ├── soc_top/
+│   ├── results/
+│   └── README.md
 ├── docs/
 │   └── architecture_bw.svg
 └── README.md
 ```
 
-
 ## Physical Design Direction
+
+Physical Design 대상은 `core`와 `soc_top` 두 단계로 유지합니다.
 
 ```text
 RTL
