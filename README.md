@@ -163,7 +163,6 @@ External memory / FIFO / Loader는 프로그램과 초기 데이터를 simulatio
 └── README.md
 ```
 
-기존 standalone CPU 학습용 RTL과 testbench는 설계 발전 과정을 보존하기 위해 repository에 유지합니다.
 
 ## Physical Design Direction
 
@@ -199,4 +198,3 @@ RTL
 
 > **5-stage LEGv8 CPU + AHB-Lite + SRAM hard macros + MMIO를 포함한 small SoC를 구성하고, 이를 Sky130에서 RTL-to-GDSII까지 구현 및 분석하는 것**
 
-Cache, DDR controller, DMA, interrupt controller, bit-level UART PHY 등은 현재 핵심 범위에서 제외합니다.
