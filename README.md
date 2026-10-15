@@ -1,52 +1,50 @@
-# LEGv8 5-Stage Pipelined CPU SoC
+# LEGv8 5-Stage Pipelined CPU
 
-LEGv8 기반 5-stage pipelined CPU에 **Sky130 SRAM hard macro, AHB-Lite, MMIO**를 결합한 소형 SoC 프로젝트입니다.
+LEGv8 기반 **5-stage pipelined CPU**를 직접 설계하고, **Sky130 SRAM hard macro**와 **AHB-Lite data bus**를 연결한 뒤 RTL-to-GDSII Physical Design을 진행하는 프로젝트입니다.
 
-목표는 CPU 기능 확장보다 직접 구성한 RTL을 대상으로 **RTL-to-GDSII / Physical Design / STA**를 수행하고 timing, placement, routing 결과를 분석하는 것입니다.
+## CPU Design
 
-## Architecture
+- 5-stage pipeline: `IF / ID / EX / MEM / WB`
+- Load-use hazard detection 및 pipeline stall
+- EX/MEM, MEM/WB forwarding
+- Conditional / unconditional branch 처리
+- Taken branch flush
+- Memory wait에 따른 pipeline hold
 
-`soc_top`의 주요 구성은 다음과 같습니다.
+## SRAM Integration
+
+Sky130 32-bit SRAM hard macro를 총 3개 사용합니다.
 
 ```text
-soc_top
-├─ LEGv8 5-stage Core
-├─ Instruction SRAM : 32-bit macro ×1
-├─ AHB-Lite Master / Fabric
-├─ Data SRAM        : 32-bit macro ×2 → logical 64-bit DMEM
-├─ MMIO             : GPIO / UART FIFO
-└─ External Loader  : simulation image loading
+Instruction Memory : 32-bit SRAM ×1
+Data Memory        : 32-bit SRAM ×2 → logical 64-bit DMEM
 ```
 
-- **Instruction side**: CPU ↔ IMEM 전용 request/response path
-- **Data side**: CPU Load/Store → AHB-Lite → DMEM / MMIO
-- **SRAM hard macro**: 총 3개 (`IMEM ×1 + DMEM ×2`)
-- **Pipeline**: `IF / ID / EX / MEM / WB`
-- Hazard detection, forwarding, branch flush 지원
+Instruction memory는 CPU와 전용 request/response interface로 연결하고, data memory는 AHB-Lite를 통해 접근합니다.
 
-External Loader는 프로그램과 초기 데이터를 SRAM에 적재하기 위한 **verification infrastructure**이며 runtime instruction-fetch path는 아닙니다.
+## AHB-Lite
 
-## Memory Map
+CPU의 load/store data path에 AHB-Lite Master/Fabric을 적용했습니다.
 
-| Address | Block |
-|---|---|
-| `0x0000 ~ 0x00FF` | DMEM |
-| `0x0100` | GPIO_OUT |
-| `0x0108` | GPIO_IN |
-| `0x0110` | GPIO_OE |
-| `0x0120` | UART_RXDATA |
-| `0x0128` | UART_TXDATA |
-| `0x0130` | UART_STATUS |
+```text
+CPU Load / Store
+       ↓
+AHB-Lite Master
+       ↓
+AHB-Lite Fabric
+       ↓
+      DMEM
+```
 
-UART는 현재 **MMIO + FIFO + byte-stream interface**까지 구현되어 있으며 bit-level UART PHY는 포함하지 않습니다.
+현재 구현은 single-master / single-transfer 중심의 간단한 AHB-Lite 구조입니다.
 
 ## Verification
 
-Directed regression에서 다음 항목을 확인했습니다.
+Directed regression을 통해 다음 항목을 확인했습니다.
 
-- Load-use hazard / pipeline stall
-- EX/MEM, MEM/WB forwarding
-- Conditional / unconditional branch
+- Pipeline hazard / stall
+- Forwarding
+- Branch / flush
 - SRAM wrapper integration
 - AHB-Lite DMEM access
 
@@ -54,26 +52,28 @@ AHB-Lite integration 기준 directed regression **40/40 PASS**를 확인했습�
 
 ## Physical Design
 
-Physical Design은 `core`와 `soc_top`을 대상으로 진행합니다.
+Sky130/OpenLane 환경에서 `core`와 `soc_top`을 대상으로 Physical Design을 진행합니다.
 
 ```text
-RTL → Synthesis → Floorplan → Macro Placement → Placement
-    → CTS → Routing → STA / Timing Closure → GDSII
+RTL
+ → Synthesis
+ → Floorplan
+ → SRAM Macro Placement
+ → Placement
+ → CTS
+ → Routing
+ → STA / Timing Closure
+ → GDSII
 ```
 
-주요 분석 대상:
+주요 관심 항목은 SRAM macro placement, congestion, clock tree, setup/hold timing, critical path 및 RTL 구조와 physical implementation 결과의 관계입니다.
 
-- SRAM macro placement / halo / routing channel
-- Standard-cell utilization / congestion
-- Setup / Hold, WNS / TNS
-- Critical path와 RTL 구조의 관계
-- Sky130/OpenLane 기반 RTL-to-GDSII
-
-## Repository
+## Repository Structure
 
 ```text
 rtl/                 RTL source
-physical_design/     core / soc_top OpenLane flow
+physical_design/core/
+physical_design/soc_top/
 physical_design/results/
-docs/                architecture diagram
+tb/                  Testbench
 ```
