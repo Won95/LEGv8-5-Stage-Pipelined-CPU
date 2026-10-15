@@ -4,10 +4,6 @@ LEGv8 기반 5-stage pipelined CPU에 **Sky130 SRAM hard macro, AHB-Lite, MMIO**
 
 목표는 CPU 기능 확장보다 직접 구성한 RTL을 대상으로 **RTL-to-GDSII / Physical Design / STA**를 수행하고 timing, placement, routing 결과를 분석하는 것입니다.
 
-<p align="center">
-  <img src="docs/architecture_bw.svg" width="100%" alt="LEGv8 SoC architecture">
-</p>
-
 ## Architecture
 
 `soc_top`의 주요 구성은 다음과 같습니다.
